@@ -280,6 +280,37 @@
     .controls { flex-direction: column; align-items: stretch; }
     .hour-control { min-width: 0; }
   }
+
+  /* ---- per-borough small multiples ---- */
+  .boro-lede { margin-top: 32px; margin-bottom: 20px; }
+  .boro-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .boro-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .boro-card h3 { font-size: 14px; margin: 0 0 4px; }
+  .boro-card .boro-stats {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 10px;
+  }
+  .boro-card .boro-map {
+    height: 260px;
+    width: 100%;
+    border-radius: 8px;
+    background: var(--control-bg);
+  }
+  .boro-card .boro-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
 </style>
 </head>
 <body>
@@ -398,6 +429,16 @@
         </div>
       </div>
     </div>
+
+    <p class="section-lede boro-lede">
+      Manhattan's volume is so much higher than the rest of the city that on
+      the map above, real outer-borough stations can read as empty space next
+      to it — every station shown there is genuine (confirmed against actual
+      NYC borough boundaries, not a rough guess), just comparatively quiet.
+      Below, each borough gets its own map, its own zoom, and its own
+      brightness scale, so its stations are visible on their own terms.
+    </p>
+    <div class="boro-grid" id="boro-grid"></div>
   </section>
 
   <section class="section-block prose" id="report">
@@ -436,14 +477,19 @@
       <h3>Where they ride</h3>
       <p>
         The system spans <strong>2,128 stations</strong>, and NYC DOT's bike lane
-        network — <strong>23,807</strong> mapped segments — is built out fairly evenly
-        across all five boroughs. Actual ridership isn't: a rough geographic split
-        puts roughly <strong>39%</strong> of stations inside the Manhattan core, and
-        that core alone accounts for something like <strong>three-quarters</strong> of
-        all citywide rides. Brooklyn, Queens, and the Bronx all have real, mapped
-        stations and meaningfully lower per-station volume — not the empty gap an
-        earlier, more zoomed-in version of this map made it look like (see the map's
-        own notes on that fix in the repo history).
+        network — <strong>23,807</strong> mapped segments — is built out across all
+        five boroughs. Actual ridership isn't nearly as even: classifying every
+        station against real NYC borough boundaries (not a rough lat/lng guess) shows
+        Manhattan holding <strong>31%</strong> of stations but <strong>66%</strong> of
+        all citywide rides. Brooklyn actually has slightly <em>more</em> stations than
+        Manhattan (690 vs. 666) but only <strong>24%</strong> of rides; Queens
+        (<strong>21%</strong> of stations) and the Bronx (<strong>15%</strong>) trail
+        further behind at <strong>7%</strong> and <strong>3%</strong> of rides
+        respectively. Staten Island has real DOT bike lanes but, as of January 2024,
+        <strong>zero</strong> Citi Bike stations. The borough-by-borough maps below
+        make this concrete: every borough's stations are real, they're just measured
+        on Manhattan's scale on the map above, which makes the quieter ones look
+        emptier than they are.
       </p>
     </div>
 
@@ -842,6 +888,81 @@
 
     updateHour();
 
+    // ---- per-borough small multiples ----
+    // The citywide map above normalizes every station against the single
+    // busiest station in the whole system (Manhattan). That's correct for
+    // showing citywide scale, but it means a real, staffed outer-borough
+    // station can render as almost nothing next to Manhattan's peak — not
+    // because it's missing, but because it's being measured on the wrong
+    // scale. Each panel below re-normalizes against that borough's own
+    // busiest station instead, so real stations that get crushed above are
+    // visible here.
+    const BOROUGHS = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"];
+    const boroSlug = (b) => b.toLowerCase().replace(/\s+/g, "-");
+    const miniMaps = [];
+    const boroGrid = document.getElementById("boro-grid");
+    const boroSummary = (window.SUMMARY_DATA && window.SUMMARY_DATA.by_borough) || {};
+
+    BOROUGHS.forEach((boro) => {
+      const info = boroSummary[boro];
+      const card = document.createElement("div");
+      card.className = "boro-card";
+      card.innerHTML = `
+        <h3>${boro}</h3>
+        <p class="boro-stats">${info ? `${info.stations.toLocaleString()} stations &middot; ${info.rides.toLocaleString()} rides (${(info.ride_share * 100).toFixed(1)}% of citywide)` : ""}</p>
+        <div class="boro-map" id="boro-map-${boroSlug(boro)}"></div>
+        ${info && info.stations === 0 ? '<p class="boro-note">No Citi Bike stations here as of January 2024 — bike lanes shown for context.</p>' : ""}
+      `;
+      boroGrid.appendChild(card);
+    });
+
+    BOROUGHS.forEach((boro) => {
+      const boroStations = stationsData.stations.filter(s => s.boro === boro);
+      const boroLaneFeatures = bikePathsData.features.filter(f => f.properties.boro_name === boro);
+      const color = boroColors()[boro] || "#898781";
+
+      const miniMap = L.map(`boro-map-${boroSlug(boro)}`, {
+        zoomControl: false,
+        scrollWheelZoom: false,
+        attributionControl: false,
+      });
+
+      const miniLightTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 });
+      const miniDarkTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 });
+      let miniCurrentTiles = isDark() ? miniDarkTiles : miniLightTiles;
+      miniCurrentTiles.addTo(miniMap);
+
+      const miniLaneLayer = L.geoJSON({ type: "FeatureCollection", features: boroLaneFeatures }, {
+        style: () => ({ color, weight: 1.5, opacity: 0.75 }),
+      }).addTo(miniMap);
+
+      let miniMarkerLayer = null;
+      if (boroStations.length) {
+        const boroMax = Math.max(1, ...boroStations.map(s => s.total));
+        miniMarkerLayer = L.layerGroup(
+          boroStations.map(s => {
+            const scale = Math.sqrt(s.total / boroMax);
+            return L.circleMarker([s.lat, s.lng], {
+              radius: 2 + scale * 5,
+              weight: 1,
+              color: "#fff",
+              fillColor: color,
+              fillOpacity: 0.35 + scale * 0.5,
+              opacity: 0.5 + scale * 0.5,
+            }).bindTooltip(`<b>${s.name}</b><br>${s.total.toLocaleString()} rides (all day)`, { className: "station-tip" });
+          })
+        ).addTo(miniMap);
+        miniMap.fitBounds(L.latLngBounds(boroStations.map(s => [s.lat, s.lng])), { padding: [24, 24] });
+      } else if (boroLaneFeatures.length) {
+        miniMap.fitBounds(miniLaneLayer.getBounds(), { padding: [24, 24] });
+      }
+
+      miniMaps.push({
+        miniMap, miniLaneLayer, miniMarkerLayer, miniLightTiles, miniDarkTiles, boro,
+        setTiles(next) { if (miniCurrentTiles !== next) { miniMap.removeLayer(miniCurrentTiles); next.addTo(miniMap); miniCurrentTiles = next; } },
+      });
+    });
+
     if (window.matchMedia) {
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
         applyTiles();
@@ -853,6 +974,15 @@
           dashArray: feature.properties.facilitycl === "III" ? "1,4" : null,
         }));
         paintBoroLegend();
+
+        miniMaps.forEach(m => {
+          m.setTiles(isDark() ? m.miniDarkTiles : m.miniLightTiles);
+          const color = boroColors()[m.boro] || "#898781";
+          m.miniLaneLayer.setStyle(() => ({ color, weight: 1.5, opacity: 0.75 }));
+          if (m.miniMarkerLayer) {
+            m.miniMarkerLayer.eachLayer(marker => marker.setStyle({ fillColor: color }));
+          }
+        });
       });
     }
   })();

@@ -36,6 +36,14 @@ heat layer of trip starts per station (toggleable, and scrubbable through the
 DOT's actual bike lane network colored by borough, so you can see how
 ridership relates to where the infrastructure is — or isn't.
 
+Manhattan's volume is so much higher than the rest of the city that on the
+citywide map, real outer-borough stations can read as empty space next to it.
+Below the main map, each of the 5 boroughs gets its own small map — its own
+zoom, and its own brightness scale normalized to that borough's own busiest
+station — so stations that get visually crushed above are clearly visible on
+their own terms. Every station is classified by real NYC borough boundary
+(point-in-polygon), not a rough lat/lng guess.
+
 ## The report
 
 The page closes with a written summary of what the analysis found: rider mix
@@ -54,6 +62,9 @@ notebook downloads the file at runtime — no data is committed to this repo.
 Requires `pandas`, `requests`, `matplotlib`, and `seaborn`. Run top-to-bottom
 in Jupyter — later cells depend on the cleaned DataFrame built earlier in the
 notebook.
+
+`scripts/build_geomap.py` additionally requires `shapely` (for the
+point-in-polygon borough classification).
 
 ## Enabling the website
 

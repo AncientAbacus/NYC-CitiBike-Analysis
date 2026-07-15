@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from shapely.geometry import Point, shape
 
 REPO = Path(__file__).resolve().parent.parent
 BIKE_ROUTES_URL = (
@@ -25,6 +26,7 @@ BIKE_ROUTES_URL = (
     "&$where=status='Current'"
     "&$limit=50000"
 )
+BORO_BOUNDARIES_URL = "https://data.cityofnewyork.us/resource/gthc-hcne.geojson"
 BORO_NAMES = {"1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island"}
 
 
@@ -81,6 +83,23 @@ def build_stations(df: pd.DataFrame) -> dict:
     return stations
 
 
+def assign_boroughs(stations: list) -> None:
+    """Classify each station by real borough polygon (point-in-polygon), not a
+    lat/lng bounding-box guess — a rough box was previously used for a quick
+    sanity check and gave meaningfully wrong shares (e.g. ~39%/75% for
+    Manhattan's station/ride share vs. the true ~31%/66%). Mutates `stations`
+    in place, adding a `boro` field (a NYC borough name, or "Other" for the
+    handful of stations across the river in Jersey City)."""
+    print("Downloading NYC borough boundaries...", flush=True)
+    resp = requests.get(BORO_BOUNDARIES_URL, timeout=60)
+    resp.raise_for_status()
+    boros = [(f["properties"]["boroname"], shape(f["geometry"])) for f in resp.json()["features"]]
+
+    for s in stations:
+        point = Point(s["lng"], s["lat"])
+        s["boro"] = next((name for name, poly in boros if poly.contains(point)), "Other")
+
+
 def write_stations(stations: list, label: str) -> None:
     out = {
         "title": "Citi Bike Ridership by Station",
@@ -121,17 +140,33 @@ def write_bike_routes() -> int:
 
 
 def write_summary(stations: list, bike_lane_segments: int, label: str) -> None:
+    total_rides = sum(s["total"] for s in stations)
+    # Seed every real NYC borough up front — Staten Island has zero Citi Bike
+    # stations, and a borough that never appears as a key (vs. one present
+    # with stations=0) is easy to mishandle downstream (the site's "no
+    # stations here" note depends on the key existing).
+    by_boro = {name: {"stations": 0, "rides": 0} for name in BORO_NAMES.values()}
+    for s in stations:
+        b = by_boro.setdefault(s["boro"], {"stations": 0, "rides": 0})
+        b["stations"] += 1
+        b["rides"] += s["total"]
+    for b in by_boro.values():
+        b["station_share"] = round(b["stations"] / len(stations), 4)
+        b["ride_share"] = round(b["rides"] / total_rides, 4)
+
     out = {
         "label": label,
-        "total_rides": sum(s["total"] for s in stations),
+        "total_rides": total_rides,
         "station_count": len(stations),
         "bike_lane_segments": bike_lane_segments,
+        "by_borough": by_boro,
     }
     data_dir = REPO / "docs" / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "summary.json").write_text(json.dumps(out))
     (data_dir / "summary.js").write_text("window.SUMMARY_DATA = " + json.dumps(out) + ";\n")
     print("Wrote docs/data/summary.{json,js}", flush=True)
+    print("By borough:", json.dumps(by_boro, indent=2), flush=True)
 
 
 def main() -> None:
@@ -143,6 +178,7 @@ def main() -> None:
     df = clean(df, yyyymm)
 
     stations = build_stations(df)
+    assign_boroughs(stations)
     write_stations(stations, label=label)
     bike_lane_segments = write_bike_routes()
     write_summary(stations, bike_lane_segments, label=label)
