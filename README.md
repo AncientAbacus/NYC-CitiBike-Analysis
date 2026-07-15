@@ -11,8 +11,10 @@ where.
   the month's trip data directly from Citi Bike's public S3 feed, cleans it,
   and walks through trip duration, rider mix, ride timing, and busiest
   stations.
-- [`docs/`](docs/index.html) — a static site rendering one of the notebook's
-  findings, an interactive ride-volume heatmap by hour and day of week.
+- [`docs/`](docs/index.html) — a static site built on the notebook's findings:
+  an interactive ride-volume heatmap by hour and day of week, plus a
+  geospatial [ridership map](docs/map.html) of station density against NYC's
+  bike lane network, scrubbable by hour of day.
   [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)
   (once GitHub Pages is enabled for this repo — see below).
 
@@ -23,6 +25,14 @@ where.
 Weekday ridership shows a sharp AM/PM commute pattern (8am and 5-6pm); weekend
 ridership spreads across a broader, later midday window instead — members
 commute, casual riders wander in on their own schedule.
+
+## The ridership map
+
+[`docs/map.html`](docs/map.html) plots the same January 2024 trips
+geospatially: a Leaflet heat layer of trip starts per station (toggleable, and
+scrubbable through the 24 hours to watch the commute rush move across the
+city), overlaid on NYC DOT's actual bike lane network so you can see how
+ridership relates to where the infrastructure is — or isn't.
 
 ## Data source
 
@@ -41,7 +51,7 @@ earlier in the notebook.
 The heatmap site lives in `docs/` so it can be served straight from GitHub
 Pages: repo **Settings → Pages → Deploy from a branch → `main` / `docs`**.
 
-## Regenerating the heatmap
+## Regenerating the site data
 
 `scripts/build_heatmap.py` downloads a month of Citi Bike data, cleans it the
 same way as the notebook, and rewrites `docs/data/heatmap.{json,js}` and
@@ -49,4 +59,13 @@ same way as the notebook, and rewrites `docs/data/heatmap.{json,js}` and
 
 ```bash
 python scripts/build_heatmap.py 202401   # YYYYMM, defaults to 202401
+```
+
+`scripts/build_geomap.py` does the same for the ridership map — per-station
+location/ride counts (`docs/data/stations.{json,js}`) and a trimmed copy of
+NYC DOT's current bike route network (`docs/data/bike_paths.{geojson,js}`),
+pulled live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib):
+
+```bash
+python scripts/build_geomap.py 202401
 ```

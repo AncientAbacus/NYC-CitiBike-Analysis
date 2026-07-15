@@ -14,6 +14,7 @@
     --text-muted:     #898781;
     --gridline:       #e1e0d9;
     --border:         rgba(11,11,11,0.10);
+    --accent:         #2a78d6;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
@@ -25,6 +26,7 @@
       --text-muted:     #898781;
       --gridline:       #2c2c2a;
       --border:         rgba(255,255,255,0.10);
+      --accent:         #3987e5;
     }
   }
   :root[data-theme="dark"] {
@@ -36,6 +38,7 @@
     --text-muted:     #898781;
     --gridline:       #2c2c2a;
     --border:         rgba(255,255,255,0.10);
+    --accent:         #3987e5;
   }
 
   * { box-sizing: border-box; }
@@ -64,11 +67,14 @@
     line-height: 1.2;
   }
   header p.subtitle {
-    margin: 0 0 32px;
+    margin: 0 0 16px;
     color: var(--text-secondary);
     font-size: 15px;
     max-width: 60ch;
   }
+  nav.crumbs { margin-bottom: 32px; font-size: 13px; }
+  nav.crumbs a { color: var(--accent, #2a78d6); text-decoration: none; font-weight: 600; }
+  nav.crumbs a:hover { text-decoration: underline; }
 
   .card {
     background: var(--surface-1);
@@ -217,6 +223,7 @@
       When New Yorkers actually ride: <span id="total-rides-inline"></span> cleaned trips
       from January 2024 Citi Bike system data, broken out by hour of day and day of week.
     </p>
+    <nav class="crumbs"><a href="map.html">See where they ride &rarr; interactive station map</a></nav>
   </header>
 
   <div class="card">

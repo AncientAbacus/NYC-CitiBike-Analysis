@@ -5,8 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository content
 
 - `CitiBike_Analysis.ipynb` — the analysis notebook, NYC Citi Bike trip data for January 2024 (~1.9M trips). No application code, package manifest, or test suite backs it — all logic lives in the notebook's cells.
-- `docs/` — a static site (`index.html` + `data/heatmap.{json,js}` + `assets/heatmap.png`) rendering the notebook's hour-by-day ride-volume heatmap as an interactive page, meant to be served via GitHub Pages from this folder.
-- `scripts/build_heatmap.py` — regenerates the `docs/` heatmap data and PNG for a given month (`YYYYMM`), applying the same cleaning steps as the notebook. Run this after changing which month the site displays, rather than hand-editing `docs/data/heatmap.json`.
+- `docs/` — a two-page static site meant to be served via GitHub Pages from this folder:
+  - `index.html` (+ `data/heatmap.{json,js}`, `assets/heatmap.png`) — the notebook's hour-by-day ride-volume heatmap as an interactive page.
+  - `map.html` (+ `data/stations.{json,js}`, `data/bike_paths.{geojson,js}`) — a Leaflet map of per-station ridership (heat layer, scrubbable by hour) over NYC DOT's bike lane network. Uses CDN-hosted Leaflet + leaflet.heat — if you bump the Leaflet version, recompute the `integrity` SRI hashes in `map.html`'s `<link>`/`<script>` tags (`curl -s <url> | openssl dgst -sha256 -binary | openssl base64`) or the browser will silently refuse to load them.
+  - Both pages share the same CSS custom-property theme (light/dark via `prefers-color-scheme` and a `data-theme` override) — keep new pages consistent with it rather than inventing a new look.
+- `scripts/build_heatmap.py` — regenerates `docs/data/heatmap.{json,js}` and `docs/assets/heatmap.png` for a given month (`YYYYMM`), applying the same cleaning steps as the notebook.
+- `scripts/build_geomap.py` — regenerates `docs/data/stations.{json,js}` (per-station ride counts/hourly profile) and `docs/data/bike_paths.{geojson,js}` (pulled live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib), not versioned upstream — re-running can pick up newly added/retired bike lanes).
+
+Regenerate via these scripts rather than hand-editing anything under `docs/data/` — they're the only place the cleaning/aggregation logic is defined.
 
 Prior to this, the repo contained `MTA_Analysis.ipynb` (NYC subway ridership data with a high-ridership predictor model and feature importance analysis, see git history on commits `cdfd951`, `2b3238c`, `0868b1a`). That notebook has been removed from the working tree in favor of the Citi Bike analysis.
 
