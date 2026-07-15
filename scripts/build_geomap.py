@@ -15,13 +15,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import pandas as pd
 import requests
-from matplotlib.colors import LinearSegmentedColormap
 
 REPO = Path(__file__).resolve().parent.parent
 BIKE_ROUTES_URL = (
@@ -139,40 +134,6 @@ def write_summary(stations: list, bike_lane_segments: int, label: str) -> None:
     print("Wrote docs/data/summary.{json,js}", flush=True)
 
 
-def write_station_preview_png(stations: list, label: str) -> None:
-    blue_seq = LinearSegmentedColormap.from_list(
-        "blue_seq", ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-    )
-    lngs = [s["lng"] for s in stations]
-    lats = [s["lat"] for s in stations]
-    totals = [s["total"] for s in stations]
-    max_total = max(totals)
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    scatter = ax.scatter(
-        lngs,
-        lats,
-        c=totals,
-        cmap=blue_seq,
-        s=[8 + 40 * (t / max_total) for t in totals],
-        alpha=0.75,
-        linewidths=0,
-    )
-    ax.set_title(f"Citi Bike Station Density ({label})")
-    ax.set_aspect("equal")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    fig.colorbar(scatter, ax=ax, label="Rides per station", shrink=0.75)
-    fig.tight_layout()
-
-    assets_dir = REPO / "docs" / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(assets_dir / "station_map_preview.png", dpi=150)
-    print("Wrote docs/assets/station_map_preview.png", flush=True)
-
-
 def main() -> None:
     yyyymm = sys.argv[1] if len(sys.argv) > 1 else "202401"
     label = pd.Period(yyyymm, freq="M").strftime("%B %Y")
@@ -185,7 +146,6 @@ def main() -> None:
     write_stations(stations, label=label)
     bike_lane_segments = write_bike_routes()
     write_summary(stations, bike_lane_segments, label=label)
-    write_station_preview_png(stations, label=label)
 
 
 if __name__ == "__main__":

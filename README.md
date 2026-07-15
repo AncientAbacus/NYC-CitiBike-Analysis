@@ -11,11 +11,12 @@ where.
   the month's trip data directly from Citi Bike's public S3 feed, cleans it,
   and walks through trip duration, rider mix, ride timing, and busiest
   stations.
-- [`docs/`](docs/index.html) — a three-page static site built on the notebook's
-  findings: a landing page with the project overview and key stats, an
-  interactive ride-volume [heatmap](docs/heatmap.html) by hour and day of
-  week, and a geospatial [ridership map](docs/map.html) of station density
-  against NYC's bike lane network, scrubbable by hour of day.
+- [`docs/index.html`](docs/index.html) — a single scrolling page built on the
+  notebook's findings, telling the whole story in order: the data & method,
+  an interactive ride-volume **heatmap** by hour and day of week, a
+  geospatial **ridership map** of station density against NYC's bike lane
+  network (scrubbable by hour of day), and a written **report** on what the
+  results actually show.
   [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)
   (once GitHub Pages is enabled for this repo — see below).
 
@@ -29,11 +30,18 @@ commute, casual riders wander in on their own schedule.
 
 ## The ridership map
 
-[`docs/map.html`](docs/map.html) plots the same January 2024 trips
-geospatially: a Leaflet heat layer of trip starts per station (toggleable, and
-scrubbable through the 24 hours to watch the commute rush move across the
-city), overlaid on NYC DOT's actual bike lane network so you can see how
+The map section plots the same January 2024 trips geospatially: a Leaflet
+heat layer of trip starts per station (toggleable, and scrubbable through the
+24 hours to watch the commute rush move across the city), overlaid on NYC
+DOT's actual bike lane network colored by borough, so you can see how
 ridership relates to where the infrastructure is — or isn't.
+
+## The report
+
+The page closes with a written summary of what the analysis found: rider mix
+and trip duration (member vs. casual), the weekday commute pattern versus
+weekend spread, and the geographic concentration of ridership in Manhattan
+despite bike lane infrastructure being built out fairly evenly citywide.
 
 ## Data source
 
@@ -49,9 +57,10 @@ notebook.
 
 ## Enabling the website
 
-The site lives in `docs/` so it can be served straight from GitHub Pages:
-repo **Settings → Pages → Deploy from a branch → `main` / `docs`**. All three
-pages share `docs/assets/site.css` for the nav, cards, and light/dark theme.
+The site is a single file, `docs/index.html`, so it can be served straight
+from GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` /
+`docs`**. Design tokens, nav, and card/stat-tile styles live in
+`docs/assets/site.css`.
 
 ## Regenerating the site data
 
@@ -67,9 +76,12 @@ python scripts/build_heatmap.py 202401   # YYYYMM, defaults to 202401
 location/ride counts (`docs/data/stations.{json,js}`), a trimmed copy of NYC
 DOT's current bike route network (`docs/data/bike_paths.{geojson,js}`) pulled
 live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib),
-the landing page's summary stats (`docs/data/summary.{json,js}`), and its
-station-density preview image (`docs/assets/station_map_preview.png`):
+and the page's summary stats (`docs/data/summary.{json,js}`):
 
 ```bash
 python scripts/build_geomap.py 202401
 ```
+
+If you regenerate either, double-check the figures cited in the report
+section of `docs/index.html` still match — they're written prose, not pulled
+live from the data files, so they don't update themselves.

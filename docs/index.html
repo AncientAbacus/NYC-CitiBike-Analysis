@@ -4,15 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NYC Citi Bike Analysis</title>
-<meta name="description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: an interactive ride-volume heatmap and a geospatial ridership map against the city's bike lane network.">
+<meta name="description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: when and where New Yorkers ride, an interactive heatmap and geospatial map, and a written report on what the data shows.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="NYC Citi Bike Analysis">
-<meta property="og:description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: an interactive ride-volume heatmap and a geospatial ridership map against the city's bike lane network.">
+<meta property="og:description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: when and where New Yorkers ride, an interactive heatmap and geospatial map, and a written report on what the data shows.">
 <meta property="og:image" content="https://ancientabacus.github.io/NYC-CitiBike-Analysis/assets/heatmap.png">
 <meta property="og:url" content="https://ancientabacus.github.io/NYC-CitiBike-Analysis/">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
+  html { scroll-behavior: smooth; }
+  :root {
+    --accent-2:   #008300;
+    --control-bg: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      --accent-2:   #008300;
+      --control-bg: #232322;
+    }
+  }
+  :root[data-theme="dark"] {
+    --accent-2:   #008300;
+    --control-bg: #232322;
+  }
+
+  section { scroll-margin-top: 72px; }
+
+  /* ---- hero ---- */
   .hero { padding-top: 56px; padding-bottom: 8px; }
   .hero p.eyebrow {
     margin: 0 0 10px;
@@ -26,7 +46,7 @@
     margin: 0 0 16px;
     font-size: clamp(28px, 5vw, 42px);
     line-height: 1.15;
-    max-width: 18ch;
+    max-width: 20ch;
   }
   .hero p.tagline {
     margin: 0 0 32px;
@@ -35,174 +55,807 @@
     max-width: 68ch;
     line-height: 1.55;
   }
+  .stat-row { margin-bottom: 8px; }
 
-  .stat-row { margin-bottom: 48px; }
-
-  .preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    margin-bottom: 48px;
-  }
-  .preview-card {
-    display: flex;
-    flex-direction: column;
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  }
-  .preview-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(11,11,11,0.08);
-  }
-  .preview-card img {
-    width: 100%;
-    aspect-ratio: 16 / 10;
-    object-fit: cover;
-    display: block;
-    background: var(--control-bg, #f0efec);
-    border-bottom: 1px solid var(--border);
-  }
-  .preview-body { padding: 18px 20px 22px; }
-  .preview-body h2 {
-    margin: 0 0 8px;
-    font-size: 17px;
-  }
-  .preview-body p {
-    margin: 0 0 14px;
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-  }
-  .preview-link {
+  /* ---- section chrome shared by every section below the hero ---- */
+  .section-block { margin-top: 56px; }
+  .section-kicker {
     font-size: 13px;
     font-weight: 600;
-    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+  .section-block h2 {
+    font-size: clamp(20px, 3vw, 26px);
+    margin: 0 0 10px;
+  }
+  .section-block > p.section-lede {
+    color: var(--text-secondary);
+    font-size: 15px;
+    max-width: 70ch;
+    line-height: 1.6;
+    margin: 0 0 24px;
   }
 
-  .methodology { margin-bottom: 16px; }
-  .methodology h2 {
-    font-size: 18px;
-    margin: 0 0 12px;
-  }
-  .methodology p {
+  /* ---- prose (data/method + report sections) ---- */
+  .prose p {
     color: var(--text-secondary);
     font-size: 14.5px;
-    line-height: 1.6;
+    line-height: 1.65;
     max-width: 72ch;
-    margin: 0 0 12px;
+    margin: 0 0 14px;
   }
-  .methodology ul {
+  .prose p:last-child { margin-bottom: 0; }
+  .prose ul {
     color: var(--text-secondary);
     font-size: 14.5px;
     line-height: 1.7;
     padding-left: 20px;
-    margin: 0 0 12px;
+    margin: 0 0 14px;
   }
-  .methodology code {
+  .prose code {
     background: var(--gridline);
     border-radius: 4px;
     padding: 1px 5px;
     font-size: 13px;
+  }
+  .prose strong { color: var(--text-primary); }
+  .report-block + .report-block { margin-top: 28px; }
+  .report-block h3 {
+    font-size: 15px;
+    margin: 0 0 8px;
+  }
+
+  /* ---- heatmap chart ---- */
+  .chart-wrap { overflow-x: auto; }
+  .chart-inner { min-width: 640px; }
+  .heat-title { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .heat-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 18px; }
+  .grid-area {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .corner { grid-column: 1; grid-row: 1 / 3; }
+  .hour-labels {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .hour-labels span { font-size: 11px; color: var(--text-muted); text-align: center; }
+  .day-labels {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    grid-template-rows: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .day-labels span {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding-right: 8px;
+  }
+  .cells {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    grid-template-rows: repeat(7, 28px);
+    gap: 2px;
+    background: var(--surface-1);
+  }
+  .cell { border-radius: 3px; cursor: default; }
+  .cell:hover { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+  .heat-legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .heat-legend .ramp {
+    height: 10px;
+    width: 160px;
+    border-radius: 5px;
+    background: linear-gradient(to right, var(--ramp-stops));
+  }
+  .heat-tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.08s ease;
+    z-index: 10;
+  }
+  .heat-tooltip.visible { opacity: 1; }
+  .heat-tooltip b { font-weight: 600; }
+  @media (max-width: 520px) {
+    .grid-area { grid-template-columns: 40px 1fr; }
+    .day-labels span { font-size: 11px; padding-right: 4px; }
+  }
+
+  /* ---- map ---- */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-btn {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--control-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .toggle-btn .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .toggle-btn[aria-pressed="true"] {
+    background: var(--text-primary);
+    color: var(--surface-1);
+    border-color: var(--text-primary);
+  }
+  .toggle-btn[aria-pressed="true"] .swatch { outline: 2px solid var(--surface-1); outline-offset: -1px; }
+  .hour-control { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px; }
+  .hour-control label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .hour-readout {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 74px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .play-btn {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--control-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .play-btn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  #map { height: 640px; width: 100%; border-radius: 8px; background: var(--control-bg); }
+  .leaflet-tooltip.station-tip {
+    background: var(--text-primary);
+    color: var(--surface-1);
+    border: none;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    box-shadow: none;
+  }
+  .leaflet-tooltip.station-tip::before { display: none; }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-ramp {
+    height: 10px;
+    width: 140px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #cde2fb, #6da7ec, #3987e5, #184f95, #0d366b);
+  }
+  .legend-boro-list { display: flex; flex-wrap: wrap; gap: 14px; }
+  .legend-boro-item { display: flex; align-items: center; gap: 6px; }
+  .legend-line { width: 18px; height: 3px; border-radius: 2px; flex: none; }
+  @media (max-width: 640px) {
+    .controls { flex-direction: column; align-items: stretch; }
+    .hour-control { min-width: 0; }
   }
 </style>
 </head>
 <body>
 <nav class="site-nav">
   <div class="nav-inner">
-    <a class="wordmark" href="index.html">NYC Citi Bike Analysis</a>
+    <a class="wordmark" href="#top">NYC Citi Bike Analysis</a>
     <div class="links">
-      <a href="index.html" aria-current="page">Overview</a>
-      <a href="heatmap.html">Heatmap</a>
-      <a href="map.html">Map</a>
+      <a href="#data">Data</a>
+      <a href="#when">Heatmap</a>
+      <a href="#where">Map</a>
+      <a href="#report">Report</a>
       <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">GitHub &#8599;</a>
     </div>
   </div>
 </nav>
 <div class="page">
-  <header class="hero">
+
+  <header class="hero" id="top">
     <p class="eyebrow">NYC Transportation Analysis</p>
     <h1>Where — and when — New Yorkers ride</h1>
     <p class="tagline">
       An end-to-end look at NYC's Citi Bike system: cleaning a month of raw trip data,
       then reading the patterns out of it two ways — <strong>when</strong> the system gets
-      busy, and <strong>where</strong>. Built on January 2024's public trip data
-      (~1.9M rides) and NYC DOT's bike lane network.
+      busy, and <strong>where</strong> — and writing up what it actually means. Built on
+      January 2024's public trip data (~1.9M rides) and NYC DOT's bike lane network.
     </p>
+    <div class="stat-row" id="overview-stat-row"></div>
   </header>
 
-  <div class="stat-row" id="stat-row"></div>
-
-  <div class="preview-grid">
-    <a class="preview-card" href="heatmap.html">
-      <img src="assets/heatmap.png" alt="Ride volume heatmap by hour of day and day of week">
-      <div class="preview-body">
-        <h2>Ride Volume Heatmap</h2>
-        <p>Rides broken out by hour of day and day of week — the weekday commute
-          rush shows up as two sharp columns; weekends spread out into one broad
-          midday window instead.</p>
-        <span class="preview-link">View the heatmap &rarr;</span>
-      </div>
-    </a>
-    <a class="preview-card" href="map.html">
-      <img src="assets/station_map_preview.png" alt="Map of Citi Bike station density across NYC">
-      <div class="preview-body">
-        <h2>Ridership Map</h2>
-        <p>An interactive map of station-level ride density against the city's
-          actual bike lane network — scrub through the hours to watch the
-          commute rush move across the city.</p>
-        <span class="preview-link">Explore the map &rarr;</span>
-      </div>
-    </a>
-  </div>
-
-  <div class="card methodology">
-    <h2>How this was built</h2>
+  <section class="section-block prose" id="data">
+    <p class="section-kicker">01 &middot; The data</p>
+    <h2>A month of trips, cleaned the same way three times</h2>
     <p>
-      The trip data comes from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a>,
-      cleaned with the same rules throughout the notebook and both site pages: duplicate
-      rides, out-of-month spillover at the file's edges, and 24h+ checkouts (Citi Bike's
-      own definition of a lost/stolen bike, not a real ride) are all removed before
-      anything gets counted.
+      The trip data comes from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a> —
+      January 2024, downloaded directly from Citi Bike's S3 bucket at analysis time, no
+      data committed to the repo. Before anything gets counted, every pipeline in this
+      project (the notebook and both visualizations below) applies the same cleaning
+      rules: drop exact duplicate rides, drop trips that spill outside the claimed month
+      at the file's edges, drop trips with non-positive duration, and drop trips over 24
+      hours — Citi Bike's own definition of a lost/stolen bike report, not a real ride.
     </p>
     <p>
-      The bike lane network is pulled live from NYC DOT's
+      The bike lane network layered into the map below is pulled live from NYC DOT's
       <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a>
-      dataset on NYC Open Data.
+      dataset on NYC Open Data — a separate dataset from Citi Bike's own trip/station
+      data, included to show ridership against the infrastructure it rides on.
     </p>
     <ul>
-      <li><code>CitiBike_Analysis.ipynb</code> — the pandas/matplotlib/seaborn exploratory analysis this site is built on.</li>
-      <li><code>scripts/</code> — the data pipeline that turns a month of raw trip data into everything these pages render.</li>
-      <li>Both interactive pages are static HTML/CSS/JS; the map uses <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> for the basemap and heat layer.</li>
+      <li><code>CitiBike_Analysis.ipynb</code> — the pandas/matplotlib/seaborn exploratory analysis this page is built on.</li>
+      <li><code>scripts/</code> — the pipeline that turns a month of raw trip data into everything on this page.</li>
+      <li>Both charts below are plain HTML/CSS/JS; the map uses <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> for the basemap and heat layer.</li>
     </ul>
-  </div>
+  </section>
 
-  <footer class="site-footer">
-    <p>Data: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a> and NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">bike route network</a>, via NYC Open Data.</p>
+  <section class="section-block" id="when">
+    <p class="section-kicker">02 &middot; When they ride</p>
+    <h2>Ride Volume Heatmap</h2>
+    <p class="section-lede">
+      Rides broken out by hour of day and day of week — the weekday commute rush shows
+      up as two sharp columns; weekends spread out into one broad midday window instead.
+    </p>
+    <div class="card">
+      <div class="stat-row" id="heatmap-stat-row"></div>
+      <div class="chart-wrap">
+        <div class="chart-inner">
+          <p class="heat-title" id="heat-title"></p>
+          <p class="heat-subtitle" id="heat-subtitle"></p>
+          <div class="grid-area">
+            <div class="corner"></div>
+            <div class="hour-labels" id="hour-labels"></div>
+            <div class="day-labels" id="day-labels"></div>
+            <div class="cells" id="cells"></div>
+          </div>
+          <div class="heat-legend">
+            <span>Fewer rides</span>
+            <span class="ramp" id="ramp"></span>
+            <span>More rides</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block" id="where">
+    <p class="section-kicker">03 &middot; Where they ride</p>
+    <h2>Ridership Map</h2>
+    <p class="section-lede">
+      Station-level trip-start density against NYC DOT's actual bike lane network —
+      scrub through the hours to watch the commute rush move across the city, and
+      toggle either layer off to isolate the other.
+    </p>
+    <div class="card">
+      <div class="stat-row" id="map-stat-row"></div>
+      <div class="controls">
+        <div class="toggle-group">
+          <button class="toggle-btn" id="toggle-heat" aria-pressed="true" type="button">
+            <span class="swatch" style="background:#3987e5"></span> Ridership heat
+          </button>
+          <button class="toggle-btn" id="toggle-lanes" aria-pressed="true" type="button">
+            <span class="swatch" style="background:#008300"></span> Bike lanes
+          </button>
+        </div>
+        <div class="hour-control">
+          <label for="hour-slider">Hour of day</label>
+          <input type="range" id="hour-slider" min="0" max="24" step="1" value="24">
+          <span class="hour-readout" id="hour-readout">All day</span>
+          <button class="play-btn" id="play-btn" aria-pressed="false" type="button">▶ Play</button>
+        </div>
+      </div>
+      <div id="map"></div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-ramp"></span> Trip-start density (fewer &rarr; more)</div>
+        <div class="legend-item">
+          Bike lanes by borough:
+          <div class="legend-boro-list" id="legend-boro-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block prose" id="report">
+    <p class="section-kicker">04 &middot; The report</p>
+    <h2>What the data actually shows</h2>
+
+    <div class="report-block">
+      <h3>Who's riding</h3>
+      <p>
+        Members (people with a subscription) accounted for <strong>89%</strong> of all
+        January 2024 trips; casual riders (single-ride or day-pass) made up the other
+        <strong>11%</strong>. Electric bikes outnumbered classic bikes system-wide
+        (<strong>64% vs. 36%</strong>). Trip length tells the more interesting story:
+        the average member trip lasted <strong>10.2 minutes</strong>, while the average
+        casual trip ran <strong>15.5 minutes</strong> — about 52% longer. That gap is
+        consistent with members using the system for direct, point-to-point commuting
+        and casual riders using it more for leisure, where the destination matters less
+        than the ride itself.
+      </p>
+    </div>
+
+    <div class="report-block">
+      <h3>When they ride</h3>
+      <p>
+        The heatmap above makes the weekday commute pattern hard to miss: a sharp
+        double-peak at <strong>8am</strong> and <strong>5–6pm</strong>, Monday through
+        Friday. Weekends look nothing like that — ridership spreads into one broad
+        window centered on midday instead of two rush-hour spikes, which lines up with
+        leisure riding rather than commuting. The single busiest hour in the entire
+        month was <strong>Wednesday at 5pm</strong>, with <strong>33,582</strong> trips
+        starting in that hour alone.
+      </p>
+    </div>
+
+    <div class="report-block">
+      <h3>Where they ride</h3>
+      <p>
+        The system spans <strong>2,128 stations</strong>, and NYC DOT's bike lane
+        network — <strong>23,807</strong> mapped segments — is built out fairly evenly
+        across all five boroughs. Actual ridership isn't: a rough geographic split
+        puts roughly <strong>39%</strong> of stations inside the Manhattan core, and
+        that core alone accounts for something like <strong>three-quarters</strong> of
+        all citywide rides. Brooklyn, Queens, and the Bronx all have real, mapped
+        stations and meaningfully lower per-station volume — not the empty gap an
+        earlier, more zoomed-in version of this map made it look like (see the map's
+        own notes on that fix in the repo history).
+      </p>
+    </div>
+
+    <div class="report-block">
+      <h3>What it adds up to</h3>
+      <p>
+        Together, the timing and the geography point at the same conclusion from two
+        directions: Citi Bike in January 2024 was functioning largely as a
+        <strong>commuter-first, Manhattan-centered</strong> system. Usage peaks exactly
+        when commutes do, and concentrates exactly where the densest existing transit
+        already is — which reads less like bike share replacing longer cross-borough
+        trips, and more like it filling short last-mile gaps in a system that's already
+        transit-rich. The outer boroughs are real, served, and comparatively quiet.
+      </p>
+    </div>
+  </section>
+
+  <footer class="site-footer section-block">
+    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January 2024. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data.</p>
     <p>See the full analysis in <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">the repository</a>.</p>
   </footer>
+
 </div>
 
+<div class="heat-tooltip" id="tooltip"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="data/summary.js"></script>
+<script src="data/heatmap.js"></script>
+<script src="data/stations.js"></script>
+<script src="data/bike_paths.js"></script>
 <script>
 (function () {
-  const s = window.SUMMARY_DATA;
-  const stats = [
-    { label: "Rides analyzed", value: s.total_rides.toLocaleString() },
-    { label: "Stations mapped", value: s.station_count.toLocaleString() },
-    { label: "Bike lane segments", value: s.bike_lane_segments.toLocaleString() },
-  ];
-  const statRow = document.getElementById("stat-row");
-  stats.forEach(stat => {
-    const el = document.createElement("div");
-    el.className = "stat-tile";
-    el.innerHTML = `<div class="label">${stat.label}</div><div class="value">${stat.value}</div>`;
-    statRow.appendChild(el);
-  });
+  function isDark() {
+    const stamp = document.documentElement.getAttribute("data-theme");
+    if (stamp === "dark") return true;
+    if (stamp === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  // ================= overview stats =================
+  (function () {
+    const s = window.SUMMARY_DATA;
+    const stats = [
+      { label: "Rides analyzed", value: s.total_rides.toLocaleString() },
+      { label: "Stations mapped", value: s.station_count.toLocaleString() },
+      { label: "Bike lane segments", value: s.bike_lane_segments.toLocaleString() },
+    ];
+    const statRow = document.getElementById("overview-stat-row");
+    stats.forEach(stat => {
+      const el = document.createElement("div");
+      el.className = "stat-tile";
+      el.innerHTML = `<div class="label">${stat.label}</div><div class="value">${stat.value}</div>`;
+      statRow.appendChild(el);
+    });
+  })();
+
+  // ================= heatmap section =================
+  (function () {
+    const data = window.HEATMAP_DATA;
+
+    // Sequential blue ramp (light mode: light -> dark = low -> high;
+    // dark mode reverses so low density still recedes into the dark surface
+    // and high density still reads as the brightest thing on the card).
+    const RAMP_LIGHT = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
+    const RAMP_DARK = RAMP_LIGHT.slice().reverse();
+
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function rgbToHex([r, g, b]) {
+      return "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+    }
+    function rampColor(fraction, ramp) {
+      const stops = ramp.length - 1;
+      const pos = Math.min(Math.max(fraction, 0), 1) * stops;
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(i0 + 1, stops);
+      const t = pos - i0;
+      const c0 = hexToRgb(ramp[i0]);
+      const c1 = hexToRgb(ramp[i1]);
+      return rgbToHex(c0.map((v, k) => v + (c1[k] - v) * t));
+    }
+
+    const maxRides = Math.max(...data.data.map(d => d.rides));
+    const totalRides = data.total_rides;
+
+    document.getElementById("heat-title").textContent = data.title;
+    document.getElementById("heat-subtitle").textContent = data.subtitle;
+
+    let peak = data.data[0];
+    for (const d of data.data) if (d.rides > peak.rides) peak = d;
+    const stats = [
+      { label: "Total rides analyzed", value: totalRides.toLocaleString() },
+      { label: "Busiest slot", value: `${peak.day} ${peak.hour}:00` },
+      { label: "Rides in busiest slot", value: peak.rides.toLocaleString() },
+    ];
+    const statRow = document.getElementById("heatmap-stat-row");
+    stats.forEach(s => {
+      const el = document.createElement("div");
+      el.className = "stat-tile";
+      el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
+      statRow.appendChild(el);
+    });
+
+    const hourLabels = document.getElementById("hour-labels");
+    data.hours.forEach(h => {
+      const span = document.createElement("span");
+      span.textContent = (h % 3 === 0) ? h : "";
+      hourLabels.appendChild(span);
+    });
+
+    const dayLabels = document.getElementById("day-labels");
+    const dayAbbrev = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun" };
+    data.days.forEach(day => {
+      const span = document.createElement("span");
+      span.textContent = dayAbbrev[day] || day;
+      dayLabels.appendChild(span);
+    });
+
+    const lookup = {};
+    data.data.forEach(d => { lookup[`${d.day}|${d.hour}`] = d.rides; });
+
+    const tooltip = document.getElementById("tooltip");
+    const cellsEl = document.getElementById("cells");
+
+    function paintCells() {
+      cellsEl.innerHTML = "";
+      const ramp = isDark() ? RAMP_DARK : RAMP_LIGHT;
+      data.days.forEach(day => {
+        data.hours.forEach(hour => {
+          const rides = lookup[`${day}|${hour}`] || 0;
+          const fraction = rides / maxRides;
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.style.background = rampColor(fraction, ramp);
+          cell.dataset.day = day;
+          cell.dataset.hour = hour;
+          cell.dataset.rides = rides;
+          cell.addEventListener("mouseenter", showTooltip);
+          cell.addEventListener("mousemove", showTooltip);
+          cell.addEventListener("mouseleave", hideTooltip);
+          cellsEl.appendChild(cell);
+        });
+      });
+    }
+
+    function showTooltip(e) {
+      const { day, hour, rides } = e.currentTarget.dataset;
+      tooltip.innerHTML = `<b>${day} ${hour}:00</b><br>${Number(rides).toLocaleString()} rides`;
+      tooltip.style.left = e.clientX + "px";
+      tooltip.style.top = e.clientY + "px";
+      tooltip.classList.add("visible");
+    }
+    function hideTooltip() {
+      tooltip.classList.remove("visible");
+    }
+
+    function paintLegend() {
+      const ramp = isDark() ? RAMP_DARK : RAMP_LIGHT;
+      document.getElementById("ramp").style.setProperty("--ramp-stops", ramp.join(","));
+    }
+
+    function repaint() {
+      paintCells();
+      paintLegend();
+    }
+
+    repaint();
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+    }
+  })();
+
+  // ================= map section =================
+  (function () {
+    const stationsData = window.STATIONS_DATA;
+    const bikePathsData = window.BIKE_PATHS_DATA;
+
+    const totalRides = stationsData.stations.reduce((sum, s) => sum + s.total, 0);
+    const stats = [
+      { label: "Total rides analyzed", value: totalRides.toLocaleString() },
+      { label: "Stations mapped", value: stationsData.stations.length.toLocaleString() },
+      { label: "Bike lane segments", value: bikePathsData.features.length.toLocaleString() },
+    ];
+    const statRow = document.getElementById("map-stat-row");
+    stats.forEach(s => {
+      const el = document.createElement("div");
+      el.className = "stat-tile";
+      el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
+      statRow.appendChild(el);
+    });
+
+    const map = L.map("map", { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
+
+    // Fit to the real extent of the station data (spans all 5 boroughs plus a
+    // handful of Jersey City stations) rather than a fixed Manhattan-centered
+    // view — otherwise the map itself misleadingly implies Citi Bike is
+    // Manhattan-only before any layer is even drawn.
+    // Padding must exceed the heat layer's radius+blur (14+16=30px below) or
+    // stations right at the edge of the bounds get their glow clipped by the
+    // canvas boundary — real edge-of-service stations (Riverdale in the Bronx,
+    // Bay Ridge in Brooklyn) were disappearing exactly this way at 24px.
+    const stationBounds = L.latLngBounds(stationsData.stations.map(s => [s.lat, s.lng]));
+    map.fitBounds(stationBounds, { padding: [56, 56] });
+    const baseZoom = map.getZoom();
+
+    const lightTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 19,
+    });
+    const darkTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 19,
+    });
+
+    let currentTiles = null;
+    function applyTiles() {
+      const next = isDark() ? darkTiles : lightTiles;
+      if (currentTiles === next) return;
+      if (currentTiles) map.removeLayer(currentTiles);
+      next.addTo(map);
+      currentTiles = next;
+    }
+    applyTiles();
+
+    // Categorical hues (not blue — blue is reserved for the ridership heat
+    // layer's identity). 5 boroughs exceeds the 4-slot all-pairs-safe cap for
+    // this palette (validated with the dataviz skill's palette validator —
+    // this ordering was the best of several tried: clean pass on the light
+    // normal-vision floor, a CVD warning band in both modes), so exact hues
+    // are not guaranteed distinguishable in isolation — the legend and every
+    // hover tooltip carry the borough name as text, so identity never depends
+    // on color alone.
+    const BORO_COLORS_LIGHT = {
+      Manhattan: "#008300",
+      Bronx: "#1baf7a",
+      Brooklyn: "#4a3aa7",
+      Queens: "#eda100",
+      "Staten Island": "#e34948",
+    };
+    const BORO_COLORS_DARK = {
+      Manhattan: "#008300",
+      Bronx: "#199e70",
+      Brooklyn: "#9085e9",
+      Queens: "#c98500",
+      "Staten Island": "#e66767",
+    };
+    function boroColors() {
+      return isDark() ? BORO_COLORS_DARK : BORO_COLORS_LIGHT;
+    }
+
+    const facilityWeight = { I: 3, II: 2, III: 1.5 };
+    const laneLayer = L.geoJSON(bikePathsData, {
+      style: (feature) => ({
+        color: boroColors()[feature.properties.boro_name] || "#898781",
+        weight: facilityWeight[feature.properties.facilitycl] || 1.5,
+        opacity: 0.75,
+        dashArray: feature.properties.facilitycl === "III" ? "1,4" : null,
+      }),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        const facilityName = { I: "Protected path", II: "Painted lane", III: "Shared route" }[p.facilitycl] || "Bike route";
+        layer.bindTooltip(`<b>${p.street || "Bike route"}</b><br>${facilityName} &middot; ${p.boro_name}`, { className: "station-tip", sticky: true });
+      },
+    }).addTo(map);
+
+    const legendBoroList = document.getElementById("legend-boro-list");
+    function paintBoroLegend() {
+      legendBoroList.innerHTML = "";
+      Object.entries(boroColors()).forEach(([boro, color]) => {
+        const item = document.createElement("div");
+        item.className = "legend-boro-item";
+        item.innerHTML = `<span class="legend-line" style="background:${color}"></span>${boro}`;
+        legendBoroList.appendChild(item);
+      });
+    }
+    paintBoroLegend();
+
+    let heatLayer = null;
+    const maxTotal = Math.max(...stationsData.stations.map(s => s.total));
+
+    // sqrt-compress before normalizing: raw ride counts are heavily right-skewed
+    // (a handful of hub stations dwarf the rest), so a linear scale would render
+    // almost the whole map as empty next to a few hotspots. A 0.06 floor keeps
+    // every station at least faintly visible instead of vanishing below the
+    // gradient's lowest stop.
+    function heatPointsForHour(hour) {
+      if (hour === -1) {
+        return stationsData.stations.map(s => [s.lat, s.lng, Math.max(0.06, Math.sqrt(s.total / maxTotal))]);
+      }
+      const maxHourly = Math.max(1, ...stationsData.stations.map(s => s.hourly[hour]));
+      return stationsData.stations
+        .filter(s => s.hourly[hour] > 0)
+        .map(s => [s.lat, s.lng, Math.max(0.06, Math.sqrt(s.hourly[hour] / maxHourly))]);
+    }
+
+    function paintHeat(hour) {
+      const points = heatPointsForHour(hour);
+      if (heatLayer) map.removeLayer(heatLayer);
+      heatLayer = L.heatLayer(points, {
+        radius: 14,
+        blur: 16,
+        // Tied to the map's actual starting zoom (rather than a fixed zoom
+        // like 15) — leaflet.heat dims intensity the further the current zoom
+        // is below `maxZoom`, so a mismatch here was silently crushing every
+        // station's brightness at the citywide default view.
+        maxZoom: baseZoom + 1,
+        minOpacity: 0.2,
+        gradient: {
+          0.06: "#cde2fb",
+          0.2: "#9ec5f4",
+          0.35: "#6da7ec",
+          0.5: "#3987e5",
+          0.68: "#256abf",
+          0.85: "#184f95",
+          1.0: "#0d366b",
+        },
+      });
+      if (document.getElementById("toggle-heat").getAttribute("aria-pressed") === "true") {
+        heatLayer.addTo(map);
+      }
+    }
+
+    // Every one of the 2,128 stations gets a dot, sized/brightened by its own
+    // ride volume — Manhattan's hub stations are genuinely ~15x busier than a
+    // typical outer-borough stop (not a rendering artifact, see the report
+    // above), but a dot for every station makes clear the network itself
+    // covers all five boroughs plus a couple of Jersey City stops.
+    const stationMarkers = L.layerGroup(
+      stationsData.stations.map(s => {
+        const scale = Math.sqrt(s.total / maxTotal);
+        return L.circleMarker([s.lat, s.lng], {
+          radius: 2 + scale * 6,
+          weight: 1,
+          color: "#fff",
+          fillColor: "#2a78d6",
+          fillOpacity: 0.25 + scale * 0.45,
+          opacity: 0.35 + scale * 0.45,
+        }).bindTooltip(`<b>${s.name}</b><br>${s.total.toLocaleString()} rides (all day)`, { className: "station-tip" });
+      })
+    ).addTo(map);
+
+    const heatBtn = document.getElementById("toggle-heat");
+    const lanesBtn = document.getElementById("toggle-lanes");
+    const slider = document.getElementById("hour-slider");
+    const readout = document.getElementById("hour-readout");
+    const playBtn = document.getElementById("play-btn");
+
+    heatBtn.addEventListener("click", () => {
+      const on = heatBtn.getAttribute("aria-pressed") === "true";
+      heatBtn.setAttribute("aria-pressed", String(!on));
+      if (on) { if (heatLayer) map.removeLayer(heatLayer); }
+      else if (heatLayer) heatLayer.addTo(map);
+    });
+    lanesBtn.addEventListener("click", () => {
+      const on = lanesBtn.getAttribute("aria-pressed") === "true";
+      lanesBtn.setAttribute("aria-pressed", String(!on));
+      if (on) map.removeLayer(laneLayer);
+      else laneLayer.addTo(map);
+    });
+
+    function currentHour() {
+      const v = Number(slider.value);
+      return v === 24 ? -1 : v;
+    }
+    function updateHour() {
+      const hour = currentHour();
+      readout.textContent = hour === -1 ? "All day" : `${hour}:00`;
+      paintHeat(hour);
+    }
+    slider.addEventListener("input", updateHour);
+
+    let playTimer = null;
+    playBtn.addEventListener("click", () => {
+      const playing = playBtn.getAttribute("aria-pressed") === "true";
+      if (playing) {
+        clearInterval(playTimer);
+        playBtn.setAttribute("aria-pressed", "false");
+        playBtn.textContent = "▶ Play";
+        return;
+      }
+      playBtn.setAttribute("aria-pressed", "true");
+      playBtn.textContent = "⏸ Pause";
+      playTimer = setInterval(() => {
+        let v = Number(slider.value) + 1;
+        if (v > 23) v = 0;
+        slider.value = v;
+        updateHour();
+      }, 900);
+    });
+
+    updateHour();
+
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+        applyTiles();
+        paintHeat(currentHour());
+        laneLayer.setStyle(feature => ({
+          color: boroColors()[feature.properties.boro_name] || "#898781",
+          weight: facilityWeight[feature.properties.facilitycl] || 1.5,
+          opacity: 0.75,
+          dashArray: feature.properties.facilitycl === "III" ? "1,4" : null,
+        }));
+        paintBoroLegend();
+      });
+    }
+  })();
 })();
 </script>
 </body>
