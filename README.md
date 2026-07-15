@@ -11,10 +11,11 @@ where.
   the month's trip data directly from Citi Bike's public S3 feed, cleans it,
   and walks through trip duration, rider mix, ride timing, and busiest
   stations.
-- [`docs/`](docs/index.html) — a static site built on the notebook's findings:
-  an interactive ride-volume heatmap by hour and day of week, plus a
-  geospatial [ridership map](docs/map.html) of station density against NYC's
-  bike lane network, scrubbable by hour of day.
+- [`docs/`](docs/index.html) — a three-page static site built on the notebook's
+  findings: a landing page with the project overview and key stats, an
+  interactive ride-volume [heatmap](docs/heatmap.html) by hour and day of
+  week, and a geospatial [ridership map](docs/map.html) of station density
+  against NYC's bike lane network, scrubbable by hour of day.
   [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)
   (once GitHub Pages is enabled for this repo — see below).
 
@@ -42,14 +43,15 @@ notebook downloads the file at runtime — no data is committed to this repo.
 
 ## Running the notebook
 
-Requires `pandas`, `numpy`, `requests`, `matplotlib`, and `seaborn`. Run
-top-to-bottom in Jupyter — later cells depend on the cleaned DataFrame built
-earlier in the notebook.
+Requires `pandas`, `requests`, `matplotlib`, and `seaborn`. Run top-to-bottom
+in Jupyter — later cells depend on the cleaned DataFrame built earlier in the
+notebook.
 
 ## Enabling the website
 
-The heatmap site lives in `docs/` so it can be served straight from GitHub
-Pages: repo **Settings → Pages → Deploy from a branch → `main` / `docs`**.
+The site lives in `docs/` so it can be served straight from GitHub Pages:
+repo **Settings → Pages → Deploy from a branch → `main` / `docs`**. All three
+pages share `docs/assets/site.css` for the nav, cards, and light/dark theme.
 
 ## Regenerating the site data
 
@@ -61,10 +63,12 @@ same way as the notebook, and rewrites `docs/data/heatmap.{json,js}` and
 python scripts/build_heatmap.py 202401   # YYYYMM, defaults to 202401
 ```
 
-`scripts/build_geomap.py` does the same for the ridership map — per-station
-location/ride counts (`docs/data/stations.{json,js}`) and a trimmed copy of
-NYC DOT's current bike route network (`docs/data/bike_paths.{geojson,js}`),
-pulled live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib):
+`scripts/build_geomap.py` does the same for the ridership map: per-station
+location/ride counts (`docs/data/stations.{json,js}`), a trimmed copy of NYC
+DOT's current bike route network (`docs/data/bike_paths.{geojson,js}`) pulled
+live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib),
+the landing page's summary stats (`docs/data/summary.{json,js}`), and its
+station-density preview image (`docs/assets/station_map_preview.png`):
 
 ```bash
 python scripts/build_geomap.py 202401

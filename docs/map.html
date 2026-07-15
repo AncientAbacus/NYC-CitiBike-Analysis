@@ -4,101 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NYC Citi Bike Ridership Map</title>
+<meta name="description" content="Interactive geospatial map of NYC Citi Bike ridership by station, layered against NYC DOT's bike lane network, scrubbable by hour of day.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root {
-    color-scheme: light;
-    --surface-1:      #fcfcfb;
-    --page-plane:     #f9f9f7;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --gridline:       #e1e0d9;
-    --border:         rgba(11,11,11,0.10);
-    --accent:         #2a78d6;
-    --accent-2:       #008300;
-    --control-bg:     #f0efec;
+    --accent-2:   #008300;
+    --control-bg: #f0efec;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
-      color-scheme: dark;
-      --surface-1:      #1a1a19;
-      --page-plane:     #0d0d0d;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --gridline:       #2c2c2a;
-      --border:         rgba(255,255,255,0.10);
-      --accent:         #3987e5;
-      --accent-2:       #008300;
-      --control-bg:     #232322;
+      --accent-2:   #008300;
+      --control-bg: #232322;
     }
   }
   :root[data-theme="dark"] {
-    color-scheme: dark;
-    --surface-1:      #1a1a19;
-    --page-plane:     #0d0d0d;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --gridline:       #2c2c2a;
-    --border:         rgba(255,255,255,0.10);
-    --accent:         #3987e5;
-    --accent-2:       #008300;
-    --control-bg:     #232322;
+    --accent-2:   #008300;
+    --control-bg: #232322;
   }
-
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--page-plane);
-    color: var(--text-primary);
-  }
-  .page {
-    max-width: 1040px;
-    margin: 0 auto;
-    padding: 48px 20px 80px;
-  }
-  header p.eyebrow {
-    margin: 0 0 6px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-  h1 {
-    margin: 0 0 8px;
-    font-size: clamp(22px, 4vw, 30px);
-    line-height: 1.2;
-  }
-  header p.subtitle {
-    margin: 0 0 16px;
-    color: var(--text-secondary);
-    font-size: 15px;
-    max-width: 65ch;
-  }
-  nav.crumbs { margin-bottom: 32px; font-size: 13px; }
-  nav.crumbs a { color: var(--accent); text-decoration: none; }
-  nav.crumbs a:hover { text-decoration: underline; }
-
-  .card {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: clamp(12px, 3vw, 24px);
-  }
-
-  .stat-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    margin-bottom: 20px;
-  }
-  .stat-tile { min-width: 130px; }
-  .stat-tile .label { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
-  .stat-tile .value { font-size: 22px; font-weight: 600; }
 
   .controls {
     display: flex;
@@ -202,14 +126,6 @@
   }
   .legend-line { width: 28px; height: 3px; border-radius: 2px; background: var(--accent-2); }
 
-  footer {
-    margin-top: 24px;
-    font-size: 13px;
-    color: var(--text-secondary);
-  }
-  footer a { color: inherit; }
-  footer p { margin: 0 0 6px; }
-
   @media (max-width: 640px) {
     .controls { flex-direction: column; align-items: stretch; }
     .hour-control { min-width: 0; }
@@ -217,15 +133,25 @@
 </style>
 </head>
 <body>
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="index.html">NYC Citi Bike Analysis</a>
+    <div class="links">
+      <a href="index.html">Overview</a>
+      <a href="heatmap.html">Heatmap</a>
+      <a href="map.html" aria-current="page">Map</a>
+      <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">GitHub &#8599;</a>
+    </div>
+  </div>
+</nav>
 <div class="page">
-  <header>
+  <header class="page-header">
     <p class="eyebrow">NYC Transportation Analysis</p>
     <h1>Citi Bike Ridership Map</h1>
     <p class="subtitle">
       Where trips start across the city, layered against NYC DOT's bike lane network —
       scrub through the hours to see the morning and evening commute rush move across the map.
     </p>
-    <nav class="crumbs"><a href="index.html">&larr; Ride volume heatmap</a></nav>
   </header>
 
   <div class="card">
@@ -257,7 +183,7 @@
     </div>
   </div>
 
-  <footer>
+  <footer class="site-footer">
     <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January 2024, aggregated per station. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data.</p>
     <p>See the full analysis in <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">the repository</a>.</p>
   </footer>

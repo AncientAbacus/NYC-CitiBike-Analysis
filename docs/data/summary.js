@@ -1,0 +1,1 @@
+window.SUMMARY_DATA = {"label": "January 2024", "total_rides": 1885944, "station_count": 2128, "bike_lane_segments": 23807};
