@@ -15,7 +15,8 @@ where.
   notebook's findings, telling the whole story in order: the data & method,
   an interactive ride-volume **heatmap** by hour and day of week, a
   geospatial **ridership map** of station density against NYC's bike lane
-  network (scrubbable by hour of day), and a written **report** on what the
+  network (scrubbable by hour of day), a **predictive model** guessing
+  member vs. casual riders trip-by-trip, and a written **report** on what the
   results actually show.
   [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)
   (once GitHub Pages is enabled for this repo — see below).
@@ -44,12 +45,26 @@ station — so stations that get visually crushed above are clearly visible on
 their own terms. Every station is classified by real NYC borough boundary
 (point-in-polygon), not a rough lat/lng guess.
 
+## Predicting the rider
+
+A random forest classifier (with a logistic regression baseline) tries to
+guess, from a single trip's duration, distance, timing, bike type, and start
+station popularity, whether that trip belongs to a member or a casual rider.
+The headline number is deliberately not raw accuracy: with a ~9-to-1 class
+split, always guessing "member" already scores ~89% while identifying zero
+casual riders. Weighted to actually find the minority class, the forest
+trades accuracy for real recall on casual riders (ROC-AUC well above random
+guessing) — and its feature importances point back at the same duration gap
+the EDA already found, this time confirmed ride-by-ride rather than just on
+average.
+
 ## The report
 
 The page closes with a written summary of what the analysis found: rider mix
 and trip duration (member vs. casual), the weekday commute pattern versus
-weekend spread, and the geographic concentration of ridership in Manhattan
-despite bike lane infrastructure being built out fairly evenly citywide.
+weekend spread, the geographic concentration of ridership in Manhattan
+despite bike lane infrastructure being built out fairly evenly citywide, and
+what the predictive model adds to that picture.
 
 ## Data source
 
@@ -59,9 +74,9 @@ notebook downloads the file at runtime — no data is committed to this repo.
 
 ## Running the notebook
 
-Requires `pandas`, `requests`, `matplotlib`, and `seaborn`. Run top-to-bottom
-in Jupyter — later cells depend on the cleaned DataFrame built earlier in the
-notebook.
+Requires `pandas`, `requests`, `matplotlib`, `seaborn`, and `scikit-learn`
+(for the predictive-modeling section). Run top-to-bottom in Jupyter — later
+cells depend on the cleaned DataFrame built earlier in the notebook.
 
 `scripts/build_geomap.py` additionally requires `shapely` (for the
 point-in-polygon borough classification).
@@ -93,6 +108,16 @@ and the page's summary stats (`docs/data/summary.{json,js}`):
 python scripts/build_geomap.py 202401
 ```
 
-If you regenerate either, double-check the figures cited in the report
+`scripts/build_model.py` trains the member-vs-casual classifier (logistic
+regression baseline + random forest) and writes the predict section's data
+(`docs/data/model.{json,js}`) — accuracy/ROC-AUC/confusion matrix/feature
+importances for both models, plus a naive majority-class baseline for
+context. Requires `scikit-learn`:
+
+```bash
+python scripts/build_model.py 202401
+```
+
+If you regenerate any of these, double-check the figures cited in the report
 section of `docs/index.html` still match — they're written prose, not pulled
 live from the data files, so they don't update themselves.

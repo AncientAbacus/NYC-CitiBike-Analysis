@@ -311,6 +311,69 @@
     color: var(--text-muted);
     margin-top: 8px;
   }
+
+  /* ---- predict section ---- */
+  .predict-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 0.8fr;
+    gap: 28px;
+    margin-top: 8px;
+  }
+  .predict-panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+  .imp-row { display: grid; grid-template-columns: 108px 1fr 38px; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .imp-label { font-size: 12.5px; color: var(--text-secondary); }
+  .imp-bar-track { height: 10px; border-radius: 5px; background: var(--gridline); overflow: hidden; }
+  .imp-bar { height: 100%; border-radius: 5px; background: var(--accent); }
+  .imp-value { font-size: 12px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .roc-chart-wrap { max-width: 240px; margin: 0 auto; }
+  .roc-chart-wrap svg { width: 100%; height: auto; display: block; }
+  .roc-axis-label { font-size: 10px; fill: var(--text-muted); }
+  .roc-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 12px; color: var(--text-secondary); }
+  .roc-legend-item { display: flex; align-items: center; gap: 8px; }
+  .roc-legend-line { width: 16px; height: 2px; border-radius: 1px; flex: none; }
+  .confusion-grid {
+    display: grid;
+    grid-template-columns: auto repeat(2, 1fr);
+    gap: 4px;
+    font-size: 11.5px;
+  }
+  .cm-corner { }
+  .cm-col-label, .cm-row-label {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px;
+    line-height: 1.25;
+  }
+  .cm-row-label { justify-content: flex-end; text-align: right; padding-right: 8px; }
+  .cm-cell {
+    border-radius: 6px;
+    padding: 12px 6px;
+    text-align: center;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    background: var(--control-bg);
+    border: 1px solid var(--border);
+  }
+  .cm-cell.correct {
+    background: color-mix(in srgb, var(--accent) 16%, var(--control-bg));
+    border-color: var(--accent);
+  }
+  .cm-cell .cm-count { font-size: 14px; font-weight: 600; display: block; }
+  .cm-cell .cm-pct { font-size: 11px; opacity: 0.75; display: block; margin-top: 2px; }
+  .predict-note { margin-top: 20px; }
+  @media (max-width: 860px) {
+    .predict-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -321,6 +384,7 @@
       <a href="#data">Data</a>
       <a href="#when">Heatmap</a>
       <a href="#where">Map</a>
+      <a href="#predict">Predict</a>
       <a href="#report">Report</a>
       <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">GitHub &#8599;</a>
     </div>
@@ -441,8 +505,47 @@
     <div class="boro-grid" id="boro-grid"></div>
   </section>
 
+  <section class="section-block" id="predict">
+    <p class="section-kicker">04 &middot; Predicting the rider</p>
+    <h2>Can the data guess who's riding?</h2>
+    <p class="section-lede">
+      The sections above found who/when/where differences at the group level —
+      averages across thousands of trips. Here a model tries something sharper: guess,
+      for one single ride, whether it belongs to a member or a casual rider, using
+      only that trip's duration, distance, timing, bike type, and how busy its start
+      station is.
+    </p>
+    <div class="card">
+      <div class="stat-row" id="predict-stat-row"></div>
+      <div class="predict-grid">
+        <div class="predict-panel">
+          <p class="predict-panel-title">What predicts it</p>
+          <div class="importance-chart" id="importance-chart"></div>
+        </div>
+        <div class="predict-panel">
+          <p class="predict-panel-title">Model quality (ROC curve)</p>
+          <div class="roc-chart-wrap">
+            <svg id="roc-chart" viewBox="0 0 240 240" preserveAspectRatio="xMidYMid meet" role="img" aria-label="ROC curve comparing random forest and logistic regression"></svg>
+          </div>
+          <div class="roc-legend" id="roc-legend"></div>
+        </div>
+        <div class="predict-panel">
+          <p class="predict-panel-title">Random forest confusion matrix</p>
+          <div class="confusion-grid" id="confusion-grid"></div>
+        </div>
+      </div>
+      <p class="section-lede predict-note">
+        Naive baseline: always guessing "member" already scores
+        <strong id="predict-baseline-accuracy"></strong> accuracy — and identifies zero
+        casual riders. The random forest's accuracy and AUC are shown above alongside
+        that baseline specifically so the headline number can't be mistaken for skill
+        it doesn't have.
+      </p>
+    </div>
+  </section>
+
   <section class="section-block prose" id="report">
-    <p class="section-kicker">04 &middot; The report</p>
+    <p class="section-kicker">05 &middot; The report</p>
     <h2>What the data actually shows</h2>
 
     <div class="report-block">
@@ -494,6 +597,29 @@
     </div>
 
     <div class="report-block">
+      <h3>Can the data guess who's riding?</h3>
+      <p>
+        The sections above are all group-level averages. A random forest classifier
+        was trained to answer a sharper question: from a single trip's duration,
+        distance, timing, bike type, and start-station popularity alone, can you tell
+        whether <em>that one ride</em> belongs to a member or a casual rider? A naive
+        model that always guesses "member" already scores <strong>89.0%</strong>
+        accuracy while identifying zero casual riders — with a 9-to-1 class split,
+        accuracy alone is a trap. Weighted to actually find the minority class, the
+        forest's raw accuracy drops to <strong>66.7%</strong>, but that's the trade
+        working as intended: it correctly identifies <strong>63%</strong> of casual
+        riders (ROC-AUC <strong>0.714</strong>, clearly above random guessing),
+        against 0% for the naive baseline. Feature importance shows trip
+        <strong>speed</strong> and <strong>duration</strong> together account for
+        roughly half the predictive signal — confirming, ride by ride and not just on
+        average, that the "casual trips run ~52% longer" finding above is real signal.
+        Bike type and start-station popularity matter next; hour of day and weekend
+        barely register on their own, even though the heatmap shows a very real
+        group-level pattern.
+      </p>
+    </div>
+
+    <div class="report-block">
       <h3>What it adds up to</h3>
       <p>
         Put the timing and the geography together and they point at the same thing from
@@ -503,7 +629,9 @@
         already is. That reads less like bike share replacing longer cross-borough
         trips and more like it's filling short last-mile gaps in a system that's
         already transit-rich. The outer boroughs are real, served, and comparatively
-        quiet.
+        quiet. The predictive model above adds a fourth angle that agrees with the
+        first three: how a trip is ridden — fast and short versus slow and long — is a
+        stronger tell of who's on the bike than exactly when or where they got on it.
       </p>
     </div>
   </section>
@@ -523,6 +651,7 @@
 <script src="data/heatmap.js"></script>
 <script src="data/stations.js"></script>
 <script src="data/bike_paths.js"></script>
+<script src="data/model.js"></script>
 <script>
 (function () {
   function isDark() {
@@ -986,6 +1115,109 @@
         });
       });
     }
+  })();
+
+  // ================= predict section =================
+  (function () {
+    const m = window.MODEL_DATA;
+    if (!m) return;
+    const rf = m.random_forest;
+    const lr = m.logistic_regression;
+
+    const stats = [
+      { label: "Random forest accuracy", value: (rf.accuracy * 100).toFixed(1) + "%" },
+      { label: "ROC-AUC", value: rf.roc_auc.toFixed(3) },
+      { label: "Casual riders identified", value: (rf.casual_recall * 100).toFixed(0) + "%" },
+      { label: "Naive baseline accuracy", value: (m.majority_baseline_accuracy * 100).toFixed(1) + "%" },
+    ];
+    const statRow = document.getElementById("predict-stat-row");
+    stats.forEach(s => {
+      const el = document.createElement("div");
+      el.className = "stat-tile";
+      el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
+      statRow.appendChild(el);
+    });
+    document.getElementById("predict-baseline-accuracy").textContent = (m.majority_baseline_accuracy * 100).toFixed(1) + "%";
+
+    // ---- feature importance bars ----
+    const impChart = document.getElementById("importance-chart");
+    const maxImp = Math.max(...m.feature_importances.map(f => f.importance));
+    m.feature_importances.forEach(f => {
+      const row = document.createElement("div");
+      row.className = "imp-row";
+      const pct = (f.importance / maxImp) * 100;
+      row.innerHTML = `
+        <span class="imp-label">${f.label}</span>
+        <div class="imp-bar-track"><div class="imp-bar" style="width:${pct}%"></div></div>
+        <span class="imp-value">${(f.importance * 100).toFixed(1)}%</span>
+      `;
+      impChart.appendChild(row);
+    });
+
+    // ---- ROC curve ----
+    const BLUE_LIGHT = "#2a78d6", BLUE_DARK = "#3987e5";
+    const ORANGE_LIGHT = "#eb6834", ORANGE_DARK = "#d2611f";
+    const PAD = 24, SIZE = 240, PLOT = SIZE - PAD * 2;
+
+    function toPath(curve) {
+      return curve.map((p, i) => `${i === 0 ? "M" : "L"} ${(PAD + p.fpr * PLOT).toFixed(1)} ${(PAD + (1 - p.tpr) * PLOT).toFixed(1)}`).join(" ");
+    }
+
+    const rocSvg = document.getElementById("roc-chart");
+    const rocLegend = document.getElementById("roc-legend");
+
+    function paintRoc() {
+      const dark = isDark();
+      const blue = dark ? BLUE_DARK : BLUE_LIGHT;
+      const orange = dark ? ORANGE_DARK : ORANGE_LIGHT;
+      rocSvg.innerHTML = `
+        <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${SIZE - PAD}" stroke="var(--gridline)" stroke-width="1" />
+        <line x1="${PAD}" y1="${SIZE - PAD}" x2="${SIZE - PAD}" y2="${SIZE - PAD}" stroke="var(--gridline)" stroke-width="1" />
+        <line x1="${PAD}" y1="${SIZE - PAD}" x2="${SIZE - PAD}" y2="${PAD}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3,3" />
+        <path d="${toPath(lr.roc_curve)}" fill="none" stroke="${orange}" stroke-width="2" stroke-linejoin="round" />
+        <path d="${toPath(rf.roc_curve)}" fill="none" stroke="${blue}" stroke-width="2" stroke-linejoin="round" />
+        <text class="roc-axis-label" x="${PAD - 2}" y="${SIZE - PAD + 14}">0</text>
+        <text class="roc-axis-label" x="${SIZE - PAD - 6}" y="${SIZE - PAD + 14}">1</text>
+        <text class="roc-axis-label" x="${PAD - 16}" y="${SIZE - PAD + 2}">0</text>
+        <text class="roc-axis-label" x="${PAD - 16}" y="${PAD + 6}">1</text>
+        <text class="roc-axis-label" x="${SIZE / 2 - 34}" y="${SIZE - 2}">False positive rate</text>
+      `;
+      rocLegend.innerHTML = `
+        <div class="roc-legend-item"><span class="roc-legend-line" style="background:${blue}"></span> Random forest (AUC ${rf.roc_auc.toFixed(3)})</div>
+        <div class="roc-legend-item"><span class="roc-legend-line" style="background:${orange}"></span> Logistic regression (AUC ${lr.roc_auc.toFixed(3)})</div>
+        <div class="roc-legend-item"><span class="roc-legend-line" style="background:var(--text-muted); opacity:0.5"></span> Random guessing</div>
+      `;
+    }
+    paintRoc();
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintRoc);
+    }
+
+    // ---- confusion matrix ----
+    const cm = m.confusion_matrix;
+    const [[casualToCasual, casualToMember], [memberToCasual, memberToMember]] = cm.matrix;
+    const casualTotal = casualToCasual + casualToMember;
+    const memberTotal = memberToCasual + memberToMember;
+
+    function cmCell(count, rowTotal, correct) {
+      const pct = ((count / rowTotal) * 100).toFixed(0);
+      return `<div class="cm-cell${correct ? " correct" : ""}">
+        <span class="cm-count">${count.toLocaleString()}</span>
+        <span class="cm-pct">${pct}% of actual</span>
+      </div>`;
+    }
+
+    document.getElementById("confusion-grid").innerHTML = `
+      <div class="cm-corner"></div>
+      <div class="cm-col-label">Predicted<br>casual</div>
+      <div class="cm-col-label">Predicted<br>member</div>
+      <div class="cm-row-label">Actual<br>casual</div>
+      ${cmCell(casualToCasual, casualTotal, true)}
+      ${cmCell(casualToMember, casualTotal, false)}
+      <div class="cm-row-label">Actual<br>member</div>
+      ${cmCell(memberToCasual, memberTotal, false)}
+      ${cmCell(memberToMember, memberTotal, true)}
+    `;
   })();
 })();
 </script>
