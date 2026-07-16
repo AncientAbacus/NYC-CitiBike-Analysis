@@ -7,10 +7,18 @@ trips.
 
 The features are deliberately the same signals the rest of the site already
 tells a story about: duration/distance ("who's riding" -- casual trips run
-longer), hour/weekend ("when they ride" -- commute vs. leisure), and start
-station popularity ("where they ride" -- Manhattan concentration). The model
-asks whether those three threads, taken together, can predict which type of
-rider took a given trip.
+longer), hour/weekend/rush-hour/holiday ("when they ride" -- commute vs.
+leisure), and station popularity ("where they ride" -- Manhattan
+concentration), plus a couple of behavior signals (round trip, bike type).
+The model asks whether those threads, taken together, can predict which type
+of rider took a given trip.
+
+Trained with default (not class-balanced) weights on purpose: this is an
+accuracy-first model, so it should actually beat the naive "always guess
+member" baseline on accuracy -- a class-balanced model trades that away for
+better recall on the minority (casual) class instead. Both framings are
+reported: accuracy for the headline, and casual-class precision/recall/ROC-
+AUC alongside it so the trade-off stays visible either way.
 
 Usage: python scripts/build_model.py [YYYYMM]
        python scripts/build_model.py 202401   # defaults to this if omitted
@@ -25,6 +33,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import requests
+from pandas.tseries.holiday import USFederalHolidayCalendar
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -38,24 +47,33 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 REPO = Path(__file__).resolve().parent.parent
+RUSH_HOURS = {7, 8, 9, 16, 17, 18, 19}
 
 FEATURES = [
     "hour",
     "is_weekend",
+    "is_rush_hour",
+    "is_holiday",
     "trip_minutes",
     "distance_km",
     "speed_kmh",
     "is_electric",
+    "is_roundtrip",
     "start_station_rides_log",
+    "end_station_rides_log",
 ]
 FEATURE_LABELS = {
     "hour": "Hour of day",
     "is_weekend": "Weekend",
+    "is_rush_hour": "Rush hour",
+    "is_holiday": "Federal holiday",
     "trip_minutes": "Trip duration (min)",
     "distance_km": "Distance (km)",
     "speed_kmh": "Speed (km/h)",
     "is_electric": "Electric bike",
+    "is_roundtrip": "Round trip",
     "start_station_rides_log": "Start station popularity",
+    "end_station_rides_log": "End station popularity",
 }
 
 
@@ -67,7 +85,7 @@ def load_month(yyyymm: str) -> pd.DataFrame:
 
     cols = [
         "ride_id", "started_at", "ended_at", "member_casual", "rideable_type",
-        "start_station_name", "start_lat", "start_lng", "end_lat", "end_lng",
+        "start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng",
     ]
     with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
         names = [n for n in z.namelist() if n.endswith(".csv") and "__MACOSX" not in n]
@@ -87,7 +105,7 @@ def clean(df: pd.DataFrame, yyyymm: str) -> pd.DataFrame:
     before = len(df)
     df = df.drop_duplicates(subset="ride_id")
     df = df[(df["started_at"] >= month_start) & (df["started_at"] < month_end)]
-    df = df.dropna(subset=["start_station_name", "start_lat", "start_lng", "end_lat", "end_lng"])
+    df = df.dropna(subset=["start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng"])
     df = df[df["trip_minutes"] > 0]
     df = df[df["trip_minutes"] <= 24 * 60]
     after = len(df)
@@ -104,18 +122,27 @@ def haversine_km(lat1, lng1, lat2, lng2) -> np.ndarray:
     return r * 2 * np.arcsin(np.sqrt(a))
 
 
-def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+def engineer_features(df: pd.DataFrame, yyyymm: str) -> pd.DataFrame:
     df = df.copy()
+    month_start = pd.Period(yyyymm, freq="M").start_time
+    month_end = month_start + pd.offsets.MonthBegin(1)
+
     df["hour"] = df["started_at"].dt.hour
     df["is_weekend"] = (df["started_at"].dt.dayofweek >= 5).astype(int)
+    df["is_rush_hour"] = df["hour"].isin(RUSH_HOURS).astype(int)
+
+    holidays = USFederalHolidayCalendar().holidays(month_start, month_end)
+    df["is_holiday"] = df["started_at"].dt.normalize().isin(holidays).astype(int)
+
     df["distance_km"] = haversine_km(df["start_lat"], df["start_lng"], df["end_lat"], df["end_lng"])
     df["speed_kmh"] = df["distance_km"] / (df["trip_minutes"] / 60)
     df["is_electric"] = (df["rideable_type"] == "electric_bike").astype(int)
+    df["is_roundtrip"] = (df["start_station_name"] == df["end_station_name"]).astype(int)
 
     # Station popularity computed independently of member_casual -- an
     # aggregate of *all* rides through a station, so it can't leak the label.
-    station_rides = df.groupby("start_station_name")["ride_id"].transform("count")
-    df["start_station_rides_log"] = np.log1p(station_rides)
+    df["start_station_rides_log"] = np.log1p(df.groupby("start_station_name")["ride_id"].transform("count"))
+    df["end_station_rides_log"] = np.log1p(df.groupby("end_station_name")["ride_id"].transform("count"))
 
     df["is_member"] = (df["member_casual"] == "member").astype(int)
     return df
@@ -130,23 +157,21 @@ def train_and_evaluate(df: pd.DataFrame) -> dict:
     )
 
     # With an ~89/11 class split, always guessing "member" already scores
-    # ~89% accuracy while identifying zero casual riders -- report that trap
-    # explicitly rather than letting a headline accuracy number imply skill
-    # it doesn't have.
+    # ~89% accuracy while identifying zero casual riders -- report that
+    # explicitly. Both models below are trained with *default* (not
+    # class-balanced) weights specifically so their accuracy is directly
+    # comparable to, and should beat, this naive number.
     majority_label = int(y_train.mode()[0])
     majority_preds = np.full(len(y_test), majority_label)
     majority_accuracy = float((majority_preds == y_test).mean())
 
-    logistic = make_pipeline(
-        StandardScaler(),
-        LogisticRegression(class_weight="balanced", max_iter=1000),
-    )
+    logistic = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
     logistic.fit(X_train, y_train)
     logistic_proba = logistic.predict_proba(X_test)[:, 1]
     logistic_preds = logistic.predict(X_test)
 
     forest = RandomForestClassifier(
-        n_estimators=200, max_depth=12, class_weight="balanced", n_jobs=-1, random_state=42
+        n_estimators=200, max_depth=14, min_samples_leaf=3, n_jobs=2, random_state=42
     )
     forest.fit(X_train, y_train)
     forest_proba = forest.predict_proba(X_test)[:, 1]
@@ -163,6 +188,7 @@ def train_and_evaluate(df: pd.DataFrame) -> dict:
         idx = np.linspace(0, len(fpr) - 1, min(50, len(fpr))).astype(int)
         return {
             "accuracy": accuracy,
+            "beats_baseline": accuracy > majority_accuracy,
             "roc_auc": auc,
             "casual_precision": float(precision[0]),
             "casual_recall": float(recall[0]),
@@ -224,7 +250,7 @@ def main() -> None:
     df = load_month(yyyymm)
     print(f"Loaded {len(df):,} rows", flush=True)
     df = clean(df, yyyymm)
-    df = engineer_features(df)
+    df = engineer_features(df, yyyymm)
 
     results = train_and_evaluate(df)
     write_model_data(results, label=label)
