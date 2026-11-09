@@ -18,8 +18,7 @@ where.
   network (scrubbable by hour of day), a **predictive model** guessing
   member vs. casual riders trip-by-trip, and a written **report** on what the
   results actually show.
-  [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)
-  (once GitHub Pages is enabled for this repo — see below).
+  [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/).
 
 ## The heatmap
 
@@ -72,52 +71,54 @@ what the predictive model adds to that picture.
 monthly as zipped CSVs at `https://s3.amazonaws.com/tripdata/index.html`. The
 notebook downloads the file at runtime — no data is committed to this repo.
 
+## Setup
+
+```bash
+pip install -r requirements.txt
+```
+
+## One pipeline, one set of numbers
+
+`scripts/pipeline.py` is the single place the data is loaded, cleaned, and
+turned into model features. The notebook and all three build scripts import
+it, so every figure on the site and in the notebook comes from the same
+1,881,587 cleaned trips (6,498 of 1,888,085 raw rows removed: out-of-month
+spillover, missing station/coordinates, and trips over 24h). The month's zip
+is cached in `.cache/` (gitignored) so it's only downloaded once.
+
 ## Running the notebook
 
-Requires `pandas`, `requests`, `matplotlib`, `seaborn`, and `scikit-learn`
-(for the predictive-modeling section). Run top-to-bottom in Jupyter — later
-cells depend on the cleaned DataFrame built earlier in the notebook.
+Run top-to-bottom from the repo root (later cells depend on the cleaned
+DataFrame built earlier):
 
-`scripts/build_geomap.py` additionally requires `shapely` (for the
-point-in-polygon borough classification).
-
-## Enabling the website
-
-The site is a single file, `docs/index.html`, so it can be served straight
-from GitHub Pages: repo **Settings → Pages → Deploy from a branch → `main` /
-`docs`**. Design tokens, nav, and card/stat-tile styles live in
-`docs/assets/site.css`.
+```bash
+jupyter nbconvert --to notebook --execute --inplace CitiBike_Analysis.ipynb
+```
 
 ## Regenerating the site data
 
-`scripts/build_heatmap.py` downloads a month of Citi Bike data, cleans it the
-same way as the notebook, and rewrites `docs/data/heatmap.{json,js}` and
-`docs/assets/heatmap.png`:
-
 ```bash
-python scripts/build_heatmap.py 202401   # YYYYMM, defaults to 202401
+python scripts/build_heatmap.py 202401   # docs/data/heatmap.{json,js}, docs/assets/heatmap.png
 ```
 
-`scripts/build_geomap.py` does the same for the ridership map: per-station
-location/ride counts (`docs/data/stations.{json,js}`), a trimmed copy of NYC
-DOT's current bike route network (`docs/data/bike_paths.{geojson,js}`) pulled
-live from [NYC Open Data](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib),
-and the page's summary stats (`docs/data/summary.{json,js}`):
-
 ```bash
-python scripts/build_geomap.py 202401
+python scripts/build_geomap.py 202401    # stations, borough summary, bike lanes
 ```
 
-`scripts/build_model.py` trains the member-vs-casual classifier (logistic
-regression baseline + random forest) and writes the predict section's data
-(`docs/data/model.{json,js}`) — accuracy/ROC-AUC/confusion matrix/feature
-importances for both models, plus a naive majority-class baseline for
-context. Requires `scikit-learn`:
-
 ```bash
-python scripts/build_model.py 202401
+python scripts/build_model.py 202401     # member-vs-casual model results
 ```
 
-If you regenerate any of these, double-check the figures cited in the report
-section of `docs/index.html` still match — they're written prose, not pulled
-live from the data files, so they don't update themselves.
+`YYYYMM` defaults to `202401`. `build_geomap.py` also pulls NYC borough
+boundaries (for point-in-polygon borough assignment) and DOT's current
+[bike route network](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib)
+live from NYC Open Data, so re-running it can pick up new or retired bike lanes.
+
+The report section of `docs/index.html` is written prose, not generated from
+the data files. If you regenerate with a different month, update the figures
+cited there by hand.
+
+## Deployment
+
+`.github/workflows/` builds `docs/` and deploys it to GitHub Pages on every
+push to `main` (repo **Settings → Pages → Source: GitHub Actions**).

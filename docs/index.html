@@ -247,6 +247,7 @@
   }
   .play-btn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
   #map { height: 640px; width: 100%; border-radius: 8px; background: var(--control-bg); }
+  .map-fallback { padding: 24px; margin: 0; color: var(--text-muted); }
   .leaflet-tooltip.station-tip {
     background: var(--text-primary);
     color: var(--surface-1);
@@ -279,6 +280,10 @@
   @media (max-width: 640px) {
     .controls { flex-direction: column; align-items: stretch; }
     .hour-control { min-width: 0; }
+    .hour-control { flex-wrap: wrap; row-gap: 8px; }
+    .hour-control input[type="range"] { min-width: 0; flex: 1 1 140px; }
+    .hour-readout { min-width: 0; }
+    .toggle-group { flex-wrap: wrap; }
   }
 
   /* ---- per-borough small multiples ---- */
@@ -406,15 +411,17 @@
 
   <section class="section-block prose" id="data">
     <p class="section-kicker">01 &middot; The data</p>
-    <h2>A month of trips, cleaned the same way three times</h2>
+    <h2>One month of trips, one cleaning pipeline</h2>
     <p>
       The trip data comes from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a> —
       January 2024, downloaded directly from Citi Bike's S3 bucket at analysis time, no
-      data committed to the repo. Before anything gets counted, every pipeline in this
-      project (the notebook and both visualizations below) applies the same cleaning
-      rules: drop exact duplicate rides, drop trips that spill outside the claimed month
-      at the file's edges, drop trips with non-positive duration, and drop trips over 24
-      hours — Citi Bike's own definition of a lost/stolen bike report, not a real ride.
+      data committed to the repo. Every number on this page and in the notebook comes
+      from one shared cleaning module (<code>scripts/pipeline.py</code>), so the ride
+      totals agree everywhere. Its rules, in order: drop duplicate rides, drop trips that
+      spill outside the claimed month at the file's edges, drop trips missing a start or
+      end station or coordinates, drop trips with non-positive duration, and drop trips
+      over 24 hours (Citi Bike's own definition of a lost/stolen bike, not a real ride).
+      That removes 6,498 of 1,888,085 raw rows (0.34%), leaving <strong>1,881,587</strong>.
     </p>
     <p>
       The bike lane network layered into the map below is pulled live from NYC DOT's
@@ -513,7 +520,7 @@
       averages across thousands of trips. Here a model tries something sharper: guess,
       for one single ride, whether it belongs to a member or a casual rider, using
       only that trip's duration, distance, timing, bike type, and how busy its start
-      station is.
+      and end stations are.
     </p>
     <div class="card">
       <div class="stat-row" id="predict-stat-row"></div>
@@ -571,7 +578,7 @@
         Friday. Weekends look nothing like that. Ridership spreads into one broad
         window centered on midday instead of two rush-hour spikes, which fits leisure
         riding better than commuting. The single busiest hour of the entire month was
-        <strong>Wednesday at 5pm</strong>, with <strong>33,582</strong> trips starting
+        <strong>Wednesday at 5pm</strong>, with <strong>33,505</strong> trips starting
         in that hour alone.
       </p>
     </div>
@@ -601,19 +608,19 @@
       <p>
         The sections above are all group-level averages. A random forest classifier
         was trained to answer a sharper question: from a single trip's duration,
-        distance, timing, bike type, and start-station popularity alone, can you tell
+        distance, timing, bike type, and station popularity alone, can you tell
         whether <em>that one ride</em> belongs to a member or a casual rider? A naive
         model that always guesses "member" already scores <strong>89.0%</strong>
         accuracy while identifying zero casual riders — with a 9-to-1 class split,
         accuracy alone is a trap. Weighted to actually find the minority class, the
-        forest's raw accuracy drops to <strong>66.7%</strong>, but that's the trade
+        forest's raw accuracy drops to <strong>67.9%</strong>, but that's the trade
         working as intended: it correctly identifies <strong>63%</strong> of casual
-        riders (ROC-AUC <strong>0.714</strong>, clearly above random guessing),
+        riders (ROC-AUC <strong>0.723</strong>, clearly above random guessing),
         against 0% for the naive baseline. Feature importance shows trip
         <strong>speed</strong> and <strong>duration</strong> together account for
-        roughly half the predictive signal — confirming, ride by ride and not just on
+        about 43% of the predictive signal — confirming, ride by ride and not just on
         average, that the "casual trips run ~52% longer" finding above is real signal.
-        Bike type and start-station popularity matter next; hour of day and weekend
+        Bike type, distance, and station popularity matter next; hour of day and weekend
         barely register on their own, even though the heatmap shows a very real
         group-level pattern.
       </p>
@@ -661,8 +668,19 @@
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
+  // Each section runs on its own: if one throws (e.g. the Leaflet CDN is
+  // blocked, so the map can't build), the error is logged and the other
+  // sections still render.
+  function runSection(name, fn) {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`[${name}] failed to render`, err);
+    }
+  }
+
   // ================= overview stats =================
-  (function () {
+  runSection("overview stats", function () {
     const s = window.SUMMARY_DATA;
     const stats = [
       { label: "Rides analyzed", value: s.total_rides.toLocaleString() },
@@ -676,10 +694,10 @@
       el.innerHTML = `<div class="label">${stat.label}</div><div class="value">${stat.value}</div>`;
       statRow.appendChild(el);
     });
-  })();
+  });
 
   // ================= heatmap section =================
-  (function () {
+  runSection("heatmap section", function () {
     const data = window.HEATMAP_DATA;
 
     // Sequential blue ramp (light mode: light -> dark = low -> high;
@@ -794,10 +812,10 @@
     if (window.matchMedia) {
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
     }
-  })();
+  });
 
   // ================= map section =================
-  (function () {
+  runSection("map section", function () {
     const stationsData = window.STATIONS_DATA;
     const bikePathsData = window.BIKE_PATHS_DATA;
 
@@ -814,6 +832,13 @@
       el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
       statRow.appendChild(el);
     });
+
+    if (typeof L === "undefined" || typeof L.heatLayer !== "function") {
+      const msg = '<p class="map-fallback">The map library (Leaflet) couldn\'t load, so the maps are unavailable. Try reloading, or disabling a content blocker for this page.</p>';
+      document.getElementById("map").innerHTML = msg;
+      document.getElementById("boro-grid").innerHTML = msg;
+      return;
+    }
 
     const map = L.map("map", { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
 
@@ -1115,10 +1140,10 @@
         });
       });
     }
-  })();
+  });
 
   // ================= predict section =================
-  (function () {
+  runSection("predict section", function () {
     const m = window.MODEL_DATA;
     if (!m) return;
     const rf = m.random_forest;
@@ -1218,7 +1243,7 @@
       ${cmCell(memberToCasual, memberTotal, false)}
       ${cmCell(memberToMember, memberTotal, true)}
     `;
-  })();
+  });
 })();
 </script>
 </body>

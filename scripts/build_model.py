@@ -1,9 +1,8 @@
 """
 Train a member-vs-casual rider classifier and write the results behind the
-site's "Predict" section (docs/data/model.json + .js). Mirrors the cleaning
-steps in CitiBike_Analysis.ipynb / scripts/build_heatmap.py / build_geomap.py
-so the notebook, site charts, and this model all agree on the same month of
-trips.
+site's "Predict" section (docs/data/model.json + .js). Loading, cleaning and
+feature engineering come from scripts/pipeline.py, shared with the notebook,
+so the notebook, site charts, and this model all agree on the same trips.
 
 The features are deliberately the same signals the rest of the site already
 tells a story about: duration/distance ("who's riding" -- casual trips run
@@ -13,27 +12,23 @@ concentration), plus a couple of behavior signals (round trip, bike type).
 The model asks whether those threads, taken together, can predict which type
 of rider took a given trip.
 
-Trained with default (not class-balanced) weights on purpose: this is an
-accuracy-first model, so it should actually beat the naive "always guess
-member" baseline on accuracy -- a class-balanced model trades that away for
-better recall on the minority (casual) class instead. Both framings are
-reported: accuracy for the headline, and casual-class precision/recall/ROC-
-AUC alongside it so the trade-off stays visible either way.
+Both models use class_weight="balanced". With an ~89/11 class split, an
+unweighted model mostly learns to say "member" and finds few casual riders;
+balancing trades raw accuracy for casual-class recall. The naive "always
+guess member" accuracy is reported alongside so raw accuracy is never read as
+skill on its own, and ROC-AUC plus casual-class precision/recall/F1 carry the
+evaluation.
 
 Usage: python scripts/build_model.py [YYYYMM]
        python scripts/build_model.py 202401   # defaults to this if omitted
 """
 
-import io
 import json
 import sys
-import zipfile
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import requests
-from pandas.tseries.holiday import USFederalHolidayCalendar
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -46,106 +41,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from pipeline import DEFAULT_MONTH, FEATURE_LABELS, FEATURES, engineer_features, load_clean_month, month_label
+
 REPO = Path(__file__).resolve().parent.parent
-RUSH_HOURS = {7, 8, 9, 16, 17, 18, 19}
-
-FEATURES = [
-    "hour",
-    "is_weekend",
-    "is_rush_hour",
-    "is_holiday",
-    "trip_minutes",
-    "distance_km",
-    "speed_kmh",
-    "is_electric",
-    "is_roundtrip",
-    "start_station_rides_log",
-    "end_station_rides_log",
-]
-FEATURE_LABELS = {
-    "hour": "Hour of day",
-    "is_weekend": "Weekend",
-    "is_rush_hour": "Rush hour",
-    "is_holiday": "Federal holiday",
-    "trip_minutes": "Trip duration (min)",
-    "distance_km": "Distance (km)",
-    "speed_kmh": "Speed (km/h)",
-    "is_electric": "Electric bike",
-    "is_roundtrip": "Round trip",
-    "start_station_rides_log": "Start station popularity",
-    "end_station_rides_log": "End station popularity",
-}
-
-
-def load_month(yyyymm: str) -> pd.DataFrame:
-    url = f"https://s3.amazonaws.com/tripdata/{yyyymm}-citibike-tripdata.zip"
-    print(f"Downloading {yyyymm} Citi Bike trip data...", flush=True)
-    resp = requests.get(url, timeout=300)
-    resp.raise_for_status()
-
-    cols = [
-        "ride_id", "started_at", "ended_at", "member_casual", "rideable_type",
-        "start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng",
-    ]
-    with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
-        names = [n for n in z.namelist() if n.endswith(".csv") and "__MACOSX" not in n]
-        print("Reading CSVs:", names, flush=True)
-        dfs = [pd.read_csv(z.open(n), usecols=cols) for n in names]
-    return pd.concat(dfs, ignore_index=True)
-
-
-def clean(df: pd.DataFrame, yyyymm: str) -> pd.DataFrame:
-    month_start = pd.Period(yyyymm, freq="M").start_time
-    month_end = month_start + pd.offsets.MonthBegin(1)
-
-    df["started_at"] = pd.to_datetime(df["started_at"])
-    df["ended_at"] = pd.to_datetime(df["ended_at"])
-    df["trip_minutes"] = (df["ended_at"] - df["started_at"]).dt.total_seconds() / 60
-
-    before = len(df)
-    df = df.drop_duplicates(subset="ride_id")
-    df = df[(df["started_at"] >= month_start) & (df["started_at"] < month_end)]
-    df = df.dropna(subset=["start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng"])
-    df = df[df["trip_minutes"] > 0]
-    df = df[df["trip_minutes"] <= 24 * 60]
-    after = len(df)
-    print(f"Removed {before - after:,} rows ({(before - after) / before:.2%}); remaining {after:,}", flush=True)
-    return df
-
-
-def haversine_km(lat1, lng1, lat2, lng2) -> np.ndarray:
-    r = 6371.0
-    lat1, lng1, lat2, lng2 = map(np.radians, [lat1, lng1, lat2, lng2])
-    dlat = lat2 - lat1
-    dlng = lng2 - lng1
-    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlng / 2) ** 2
-    return r * 2 * np.arcsin(np.sqrt(a))
-
-
-def engineer_features(df: pd.DataFrame, yyyymm: str) -> pd.DataFrame:
-    df = df.copy()
-    month_start = pd.Period(yyyymm, freq="M").start_time
-    month_end = month_start + pd.offsets.MonthBegin(1)
-
-    df["hour"] = df["started_at"].dt.hour
-    df["is_weekend"] = (df["started_at"].dt.dayofweek >= 5).astype(int)
-    df["is_rush_hour"] = df["hour"].isin(RUSH_HOURS).astype(int)
-
-    holidays = USFederalHolidayCalendar().holidays(month_start, month_end)
-    df["is_holiday"] = df["started_at"].dt.normalize().isin(holidays).astype(int)
-
-    df["distance_km"] = haversine_km(df["start_lat"], df["start_lng"], df["end_lat"], df["end_lng"])
-    df["speed_kmh"] = df["distance_km"] / (df["trip_minutes"] / 60)
-    df["is_electric"] = (df["rideable_type"] == "electric_bike").astype(int)
-    df["is_roundtrip"] = (df["start_station_name"] == df["end_station_name"]).astype(int)
-
-    # Station popularity computed independently of member_casual -- an
-    # aggregate of *all* rides through a station, so it can't leak the label.
-    df["start_station_rides_log"] = np.log1p(df.groupby("start_station_name")["ride_id"].transform("count"))
-    df["end_station_rides_log"] = np.log1p(df.groupby("end_station_name")["ride_id"].transform("count"))
-
-    df["is_member"] = (df["member_casual"] == "member").astype(int)
-    return df
 
 
 def train_and_evaluate(df: pd.DataFrame) -> dict:
@@ -158,20 +56,19 @@ def train_and_evaluate(df: pd.DataFrame) -> dict:
 
     # With an ~89/11 class split, always guessing "member" already scores
     # ~89% accuracy while identifying zero casual riders -- report that
-    # explicitly. Both models below are trained with *default* (not
-    # class-balanced) weights specifically so their accuracy is directly
-    # comparable to, and should beat, this naive number.
+    # explicitly so the models' accuracy is never read as skill on its own.
     majority_label = int(y_train.mode()[0])
     majority_preds = np.full(len(y_test), majority_label)
     majority_accuracy = float((majority_preds == y_test).mean())
 
-    logistic = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+    logistic = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, class_weight="balanced"))
     logistic.fit(X_train, y_train)
     logistic_proba = logistic.predict_proba(X_test)[:, 1]
     logistic_preds = logistic.predict(X_test)
 
     forest = RandomForestClassifier(
-        n_estimators=200, max_depth=14, min_samples_leaf=3, n_jobs=2, random_state=42
+        n_estimators=200, max_depth=14, min_samples_leaf=3,
+        class_weight="balanced", n_jobs=-1, random_state=42,
     )
     forest.fit(X_train, y_train)
     forest_proba = forest.predict_proba(X_test)[:, 1]
@@ -244,13 +141,9 @@ def write_model_data(results: dict, label: str) -> None:
 
 
 def main() -> None:
-    yyyymm = sys.argv[1] if len(sys.argv) > 1 else "202401"
-    label = pd.Period(yyyymm, freq="M").strftime("%B %Y")
-
-    df = load_month(yyyymm)
-    print(f"Loaded {len(df):,} rows", flush=True)
-    df = clean(df, yyyymm)
-    df = engineer_features(df, yyyymm)
+    yyyymm = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MONTH
+    label = month_label(yyyymm)
+    df = engineer_features(load_clean_month(yyyymm), yyyymm)
 
     results = train_and_evaluate(df)
     write_model_data(results, label=label)

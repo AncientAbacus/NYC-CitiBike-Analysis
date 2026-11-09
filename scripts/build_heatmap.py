@@ -1,16 +1,14 @@
 """
 Rebuild the ride-volume heatmap (docs/data/heatmap.json + .js, docs/assets/heatmap.png)
-from a month of Citi Bike trip data. Mirrors the cleaning steps in
-CitiBike_Analysis.ipynb so the site and notebook stay consistent.
+from a month of Citi Bike trip data. Loading and cleaning come from
+scripts/pipeline.py, shared with the notebook and the other build scripts.
 
 Usage: python scripts/build_heatmap.py [YYYYMM]
        python scripts/build_heatmap.py 202401   # defaults to this if omitted
 """
 
-import io
 import json
 import sys
-import zipfile
 from pathlib import Path
 
 import matplotlib
@@ -18,46 +16,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-import requests
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
+from pipeline import DEFAULT_MONTH, load_clean_month, month_label
+
 REPO = Path(__file__).resolve().parent.parent
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-
-def load_month(yyyymm: str) -> pd.DataFrame:
-    url = f"https://s3.amazonaws.com/tripdata/{yyyymm}-citibike-tripdata.zip"
-    print(f"Downloading {yyyymm} Citi Bike trip data...", flush=True)
-    resp = requests.get(url, timeout=300)
-    resp.raise_for_status()
-
-    with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
-        names = [n for n in z.namelist() if n.endswith(".csv") and "__MACOSX" not in n]
-        print("Reading CSVs:", names, flush=True)
-        dfs = [
-            pd.read_csv(z.open(n), usecols=["ride_id", "started_at", "ended_at", "member_casual"])
-            for n in names
-        ]
-    return pd.concat(dfs, ignore_index=True)
-
-
-def clean(df: pd.DataFrame, yyyymm: str) -> pd.DataFrame:
-    month_start = pd.Period(yyyymm, freq="M").start_time
-    month_end = month_start + pd.offsets.MonthBegin(1)
-
-    df["started_at"] = pd.to_datetime(df["started_at"])
-    df["ended_at"] = pd.to_datetime(df["ended_at"])
-    df["trip_minutes"] = (df["ended_at"] - df["started_at"]).dt.total_seconds() / 60
-
-    before = len(df)
-    df = df.drop_duplicates(subset="ride_id")
-    df = df[(df["started_at"] >= month_start) & (df["started_at"] < month_end)]
-    df = df[df["trip_minutes"] > 0]
-    df = df[df["trip_minutes"] <= 24 * 60]
-    after = len(df)
-    print(f"Removed {before - after:,} rows ({(before - after) / before:.2%}); remaining {after:,}", flush=True)
-    return df
 
 
 def build_heat_matrix(df: pd.DataFrame) -> pd.DataFrame:
@@ -108,12 +73,9 @@ def write_png(heat: pd.DataFrame, label: str) -> None:
 
 
 def main() -> None:
-    yyyymm = sys.argv[1] if len(sys.argv) > 1 else "202401"
-    label = pd.Period(yyyymm, freq="M").strftime("%B %Y")
-
-    df = load_month(yyyymm)
-    print(f"Loaded {len(df):,} rows", flush=True)
-    df = clean(df, yyyymm)
+    yyyymm = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MONTH
+    label = month_label(yyyymm)
+    df = load_clean_month(yyyymm)
 
     heat = build_heat_matrix(df)
     write_site_data(heat, total_rides=len(df), label=label)
