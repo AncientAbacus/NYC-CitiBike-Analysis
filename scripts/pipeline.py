@@ -16,6 +16,7 @@ e.g. 2024); every build script accepts either.
 """
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -130,14 +131,18 @@ def clean(df: pd.DataFrame, yyyymm: str = DEFAULT_MONTH, verbose: bool = True) -
         ("over 24 hours", lambda d: d[d["trip_minutes"] <= 24 * 60]),
     ]
     start = len(df)
+    removed = {}
     for label, step in steps:
         before = len(df)
         df = step(df)
+        removed[label] = before - len(df)
         if verbose:
-            print(f"  removed {before - len(df):>7,}  {label}", flush=True)
+            print(f"  removed {removed[label]:>7,}  {label}", flush=True)
     if verbose:
         print(f"Removed {start - len(df):,} rows ({(start - len(df)) / start:.2%}); remaining {len(df):,}", flush=True)
-    return df.reset_index(drop=True)
+    df = df.reset_index(drop=True)
+    df.attrs["cleaning"] = {"raw_rows": start, "clean_rows": len(df), "removed": removed}
+    return df
 
 
 def load_clean_month(yyyymm: str = DEFAULT_MONTH) -> pd.DataFrame:
@@ -152,16 +157,33 @@ CLEAN_COLS = [
 
 
 def clean_month_path(yyyymm: str) -> Path:
-    """Clean one month and cache it as parquet (only once); return the path."""
+    """Clean one month and cache it as parquet (only once), alongside a small
+    JSON of how many rows each cleaning rule removed; return the parquet path."""
     out = CACHE_DIR / "clean" / f"{yyyymm}.parquet"
-    if not out.exists():
+    stats = out.with_suffix(".stats.json")
+    if not (out.exists() and stats.exists()):
         out.parent.mkdir(parents=True, exist_ok=True)
         print(f"== {yyyymm}", flush=True)
-        df = load_clean_month(yyyymm)[CLEAN_COLS]
+        df = load_clean_month(yyyymm)
+        stats.write_text(json.dumps(df.attrs["cleaning"]))
+        df = df[CLEAN_COLS]
         for col in ("member_casual", "rideable_type", "start_station_name", "end_station_name"):
             df[col] = df[col].astype("category")
         df.to_parquet(out, index=False)
     return out
+
+
+def cleaning_stats(period: str = DEFAULT_PERIOD) -> dict:
+    """Raw rows, clean rows and rows removed per rule, summed over the period."""
+    total = {"raw_rows": 0, "clean_rows": 0, "removed": {}}
+    for m in period_months(period):
+        clean_month_path(m)
+        st = json.loads((CACHE_DIR / "clean" / f"{m}.stats.json").read_text())
+        total["raw_rows"] += st["raw_rows"]
+        total["clean_rows"] += st["clean_rows"]
+        for k, v in st["removed"].items():
+            total["removed"][k] = total["removed"].get(k, 0) + v
+    return total
 
 
 def load_clean_period(period: str = DEFAULT_PERIOD, columns=None) -> pd.DataFrame:

@@ -101,6 +101,11 @@ def main() -> None:
 
     bikes_to_move = float((-active["am_net"]).clip(lower=0).sum())
     corr = float(active["am_net"].corr(active["pm_net"]))
+    # busy stations have big flows both ways, which inflates the raw correlation;
+    # normalizing each rush's net flow by that rush's total trips removes the scale
+    am_share = active["am_net"] / (active["am_dep"] + active["am_arr"])
+    pm_share = active["pm_net"] / (active["pm_dep"] + active["pm_arr"]).where(lambda v: v > 0)
+    corr_norm = float(am_share.corr(pm_share))
 
     def station_record(name, r):
         return {
@@ -123,6 +128,7 @@ def main() -> None:
         "windows": {"am": list(AM), "pm": list(PM)},
         "bikes_to_move_am": round(bikes_to_move),
         "am_pm_correlation": round(corr, 3),
+        "am_pm_correlation_normalized": round(corr_norm, 3),
         "active_stations": int(len(active)),
         "drainer_count": int((active["am_net"] <= -2).sum()),
         "filler_count": int((active["am_net"] >= 2).sum()),

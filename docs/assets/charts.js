@@ -125,16 +125,27 @@
   function lineChart(container, opts) {
     function draw() {
       container.textContent = "";
-      if (opts.series.length > 1) legend(container, opts.series);
+      if (opts.series.length > 1 || opts.band) {
+        legend(container, opts.series.concat(opts.band ? [{ name: opts.band.name, color: opts.band.color, kind: "dot" }] : []));
+      }
       const f = frame(container, opts);
       const xs = opts.x;
       const xMin = xs[0], xMax = xs[xs.length - 1];
-      const allY = opts.series.flatMap(s => s.values.filter(v => v != null));
+      const allY = opts.series.flatMap(s => s.values.filter(v => v != null))
+        .concat(opts.band ? opts.band.upper : []);
       const sc = niceScale(Math.max(...allY), opts.yTicks), yMax = sc.max;
       const sx = x => f.M.left + ((x - xMin) / (xMax - xMin || 1)) * f.iw;
       const sy = y => f.M.top + f.ih - (y / yMax) * f.ih;
       yAxis(f, yMax, opts, sc.ticks);
       xTicks(f, opts.xTicks || [], sx);
+
+      // optional shaded band (e.g. an 80% prediction interval) under the lines
+      if (opts.band) {
+        const up = opts.band.upper.map((v, i) => `${i ? "L" : "M"}${sx(xs[i]).toFixed(1)} ${sy(v).toFixed(1)}`).join("");
+        const down = opts.band.lower.map((v, i) => [i, v]).reverse()
+          .map(([i, v]) => `L${sx(xs[i]).toFixed(1)} ${sy(v).toFixed(1)}`).join("");
+        el("path", { d: up + down + "Z", fill: pick(opts.band.color), opacity: 0.18, stroke: "none" }, f.svg);
+      }
 
       opts.series.forEach(s => {
         let d = "";
@@ -164,9 +175,15 @@
           if (v == null) { dots[k].setAttribute("visibility", "hidden"); return; }
           dots[k].setAttribute("cx", X); dots[k].setAttribute("cy", sy(v)); dots[k].setAttribute("visibility", "visible");
         });
-        showTip(evt, opts.xTitle ? opts.xTitle(i) : String(xs[i]), opts.series
+        const rows = opts.series
           .filter(s => s.values[i] != null)
-          .map(s => ({ color: pick(s.color), label: s.name, value: (opts.valueFormat || fmtNum)(s.values[i]) })));
+          .map(s => ({ color: pick(s.color), label: s.name, value: (opts.valueFormat || fmtNum)(s.values[i]) }));
+        if (opts.band) {
+          const f2 = opts.valueFormat || fmtNum;
+          rows.push({ color: pick(opts.band.color), label: opts.band.name,
+            value: `${f2(opts.band.lower[i])}–${f2(opts.band.upper[i])}` });
+        }
+        showTip(evt, opts.xTitle ? opts.xTitle(i) : String(xs[i]), rows);
       }
       hit.addEventListener("pointermove", move);
       hit.addEventListener("pointerleave", () => {

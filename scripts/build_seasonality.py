@@ -5,11 +5,21 @@ daily weather, plus a simple log-linear model that separates the effect of
 temperature and rain from the day of week.
 
 Model: log(daily rides) ~ day of week + federal holiday + tmax + tmax^2
-                          + rain bucket (dry / light / heavy) + snow day
+                          + rain type + snow day
                           + linear trend (system growth over the year)
 
-Rain and temperature are correlated with season, so the rain effect is read
-as "vs. a dry day with the same temperature and weekday", not a raw average.
+Rain type uses NOAA's *hourly* observations, so a 3am shower isn't counted
+the same as a wet rush hour. Mutually exclusive, vs. a dry day:
+  off-peak rain   >= 1 mm that day, but < 1 mm during the commute windows
+  commute rain    >= 1 mm during 7-10am / 4-7pm, < 10 mm for the day
+  heavy rain      >= 10 mm for the day
+
+Rain and temperature are correlated with season, so each effect is read as
+"vs. a dry day with the same temperature and weekday", not a raw average.
+
+Uncertainty: 95% intervals from a moving-block bootstrap (14-day blocks of
+days, 2,000 resamples). Daily ridership is autocorrelated, so resampling
+single days would understate the uncertainty.
 The temperature terms are controls only: the quadratic can't capture the
 plateau-then-dip above ~30C, so the site charts binned averages of dry
 weekdays for the temperature relationship instead.
@@ -24,10 +34,19 @@ import numpy as np
 import pandas as pd
 from pandas.tseries.holiday import USFederalHolidayCalendar
 
-from pipeline import DEFAULT_PERIOD, REPO, load_clean_period, load_weather_daily
+from pipeline import DEFAULT_PERIOD, REPO, load_clean_period, load_weather_daily, load_weather_hourly
 
-LIGHT_RAIN_MM = 1.0   # >= 1 mm counts as a rainy day
+LIGHT_RAIN_MM = 1.0   # >= 1 mm counts as a rainy day / a wet commute
 HEAVY_RAIN_MM = 10.0  # >= 10 mm counts as heavy rain
+COMMUTE_HOURS = [7, 8, 9, 16, 17, 18]
+BLOCK_DAYS, N_BOOT = 14, 2000
+EFFECTS = ["offpeak_rain", "commute_rain", "heavy_rain", "snow", "holiday", "trend"]
+
+
+def commute_precip(year: str) -> pd.DataFrame:
+    h = load_weather_hourly(year)
+    wet = h[h["hour_start"].dt.hour.isin(COMMUTE_HOURS)]
+    return wet.groupby(wet["hour_start"].dt.normalize().rename("date"))["precip_mm"].sum().rename("commute_precip_mm").reset_index()
 
 
 def daily_rides(year: str) -> pd.DataFrame:
@@ -38,11 +57,13 @@ def daily_rides(year: str) -> pd.DataFrame:
     return counts.reset_index()
 
 
-def fit_weather_model(daily: pd.DataFrame) -> dict:
-    d = daily.copy()
+def design(d: pd.DataFrame) -> tuple:
     dow = pd.get_dummies(d["date"].dt.dayofweek, prefix="dow", drop_first=True, dtype=float)
     holidays = USFederalHolidayCalendar().holidays(d["date"].min(), d["date"].max())
     t = (d["tmax_c"] - 20) / 10  # centered/scaled so the quadratic is well-conditioned
+    heavy = d["precip_mm"] >= HEAVY_RAIN_MM
+    commute = (d["commute_precip_mm"] >= LIGHT_RAIN_MM) & ~heavy
+    offpeak = (d["precip_mm"] >= LIGHT_RAIN_MM) & ~heavy & ~commute
     X = pd.concat(
         [
             pd.Series(1.0, index=d.index, name="const"),
@@ -50,8 +71,9 @@ def fit_weather_model(daily: pd.DataFrame) -> dict:
             d["date"].isin(holidays).astype(float).rename("holiday"),
             t.rename("t"),
             (t ** 2).rename("t2"),
-            ((d["precip_mm"] >= LIGHT_RAIN_MM) & (d["precip_mm"] < HEAVY_RAIN_MM)).astype(float).rename("light_rain"),
-            (d["precip_mm"] >= HEAVY_RAIN_MM).astype(float).rename("heavy_rain"),
+            offpeak.astype(float).rename("offpeak_rain"),
+            commute.astype(float).rename("commute_rain"),
+            heavy.astype(float).rename("heavy_rain"),
             (d["snow_mm"] > 0).astype(float).rename("snow"),
             # the system kept growing through the year (October beat July), which
             # would otherwise be credited to temperature
@@ -59,29 +81,51 @@ def fit_weather_model(daily: pd.DataFrame) -> dict:
         ],
         axis=1,
     )
-    y = np.log(d["rides"])
-    beta, *_ = np.linalg.lstsq(X.values, y.values, rcond=None)
-    coef = dict(zip(X.columns, beta))
-    pred = X.values @ beta
+    return X, np.log(d["rides"].to_numpy())
+
+
+def fit_weather_model(daily: pd.DataFrame) -> dict:
+    X, y = design(daily)
+    cols = list(X.columns)
+    Xv = X.to_numpy()
+    beta, *_ = np.linalg.lstsq(Xv, y, rcond=None)
+    pred = Xv @ beta
     r2 = 1 - ((y - pred) ** 2).sum() / ((y - y.mean()) ** 2).sum()
 
-    def pct(c):
-        return round(float(np.exp(coef[c]) - 1), 4)
+    # moving-block bootstrap over days
+    rng = np.random.default_rng(42)
+    n = len(y)
+    starts = np.arange(n - BLOCK_DAYS + 1)
+    n_blocks = int(np.ceil(n / BLOCK_DAYS))
+    draws = []
+    for _ in range(N_BOOT):
+        idx = np.concatenate([np.arange(s, s + BLOCK_DAYS) for s in rng.choice(starts, n_blocks)])[:n]
+        b, *_ = np.linalg.lstsq(Xv[idx], y[idx], rcond=None)
+        draws.append(b)
+    draws = np.array(draws)
 
+    def effect(c):
+        i = cols.index(c)
+        lo, hi = np.percentile(draws[:, i], [2.5, 97.5])
+        return {
+            "effect": round(float(np.exp(beta[i]) - 1), 4),
+            "ci95": [round(float(np.exp(lo) - 1), 4), round(float(np.exp(hi) - 1), 4)],
+        }
+
+    flags = {c: int(X[c].sum()) for c in ("offpeak_rain", "commute_rain", "heavy_rain", "snow", "holiday")}
     return {
         "r2": round(float(r2), 3),
-        "light_rain_effect": pct("light_rain"),
-        "heavy_rain_effect": pct("heavy_rain"),
-        "snow_effect": pct("snow"),
-        "holiday_effect": pct("holiday"),
         "residual_sd_log": round(float(np.std(y - pred)), 3),
-        "annual_growth": pct("trend"),
+        "bootstrap": {"block_days": BLOCK_DAYS, "resamples": N_BOOT},
+        "days_flagged": flags,
+        "effects": {c: effect(c) for c in EFFECTS},
     }
 
 
 def main() -> None:
     year = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PERIOD
-    daily = daily_rides(year).merge(load_weather_daily(year), on="date", how="left")
+    daily = (daily_rides(year).merge(load_weather_daily(year), on="date", how="left")
+             .merge(commute_precip(year), on="date", how="left").fillna({"commute_precip_mm": 0.0}))
 
     model = fit_weather_model(daily)
     dry_weekday = (daily["date"].dt.dayofweek < 5) & (daily["precip_mm"] < LIGHT_RAIN_MM)
@@ -96,6 +140,7 @@ def main() -> None:
         "year": year,
         "total_rides": int(daily["rides"].sum()),
         "thresholds_mm": {"light_rain": LIGHT_RAIN_MM, "heavy_rain": HEAVY_RAIN_MM},
+        "commute_hours": COMMUTE_HOURS,
         "daily": [
             {
                 "date": r.date.strftime("%Y-%m-%d"),
@@ -105,6 +150,7 @@ def main() -> None:
                 "tmax_c": float(r.tmax_c),
                 "precip_mm": float(r.precip_mm),
                 "snow_mm": float(r.snow_mm),
+                "commute_precip_mm": round(float(r.commute_precip_mm), 1),
             }
             for r in daily.itertuples()
         ],
