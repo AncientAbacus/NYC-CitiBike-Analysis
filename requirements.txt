@@ -6,6 +6,7 @@ matplotlib==3.11.2
 seaborn==0.13.2
 scikit-learn==1.9.1
 shapely==2.2.0
+pyarrow==22.0.0
 
 # Running the notebook headless
 nbconvert==7.17.2

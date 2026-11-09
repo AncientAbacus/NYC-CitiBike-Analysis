@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NYC Citi Bike Analysis</title>
-<meta name="description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: when and where New Yorkers ride, an interactive heatmap and geospatial map, and a written report on what the data shows.">
+<meta name="description" content="An end-to-end analysis of 44 million NYC Citi Bike trips in 2024: when and where New Yorkers ride, how weather moves demand, where bikes pile up, and a station-level demand forecast.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="NYC Citi Bike Analysis">
-<meta property="og:description" content="An end-to-end analysis of 1.9M NYC Citi Bike trips: when and where New Yorkers ride, an interactive heatmap and geospatial map, and a written report on what the data shows.">
+<meta property="og:description" content="An end-to-end analysis of 44 million NYC Citi Bike trips in 2024: when and where New Yorkers ride, how weather moves demand, where bikes pile up, and a station-level demand forecast.">
 <meta property="og:image" content="https://ancientabacus.github.io/NYC-CitiBike-Analysis/assets/heatmap.png">
 <meta property="og:url" content="https://ancientabacus.github.io/NYC-CitiBike-Analysis/">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -317,68 +317,68 @@
     margin-top: 8px;
   }
 
-  /* ---- predict section ---- */
-  .predict-grid {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr 0.8fr;
-    gap: 28px;
-    margin-top: 8px;
+  /* ---- hero key findings ---- */
+  .key-findings { list-style: none; padding: 0; margin: 20px 0 28px; display: grid; gap: 12px; max-width: 78ch; }
+  .key-findings li {
+    padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--surface-1);
+    border-radius: 0 8px 8px 0; font-size: 14.5px; line-height: 1.5; color: var(--text-secondary);
   }
-  .predict-panel-title {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin: 0 0 14px;
+  .key-findings strong { color: var(--text-primary); }
+
+  /* ---- shared chart pieces (assets/charts.js) ---- */
+  .subsection-title { font-size: 18px; margin: 40px 0 6px; }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 20px 0 2px; }
+  .chart-subtitle { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 10px; }
+  .chart-note { font-size: 12px; color: var(--text-muted); margin: 14px 0 0; max-width: 75ch; }
+  .chart-box { width: 100%; }
+  .chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart-grid { stroke: var(--gridline); stroke-width: 1; }
+  .chart-baseline { stroke: var(--text-muted); stroke-width: 1; opacity: 0.6; }
+  .chart-tick { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chart-axis-label { font-size: 11px; fill: var(--text-secondary); }
+  .chart-hair { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+  .chart-dot, .chart-ring { stroke: var(--surface-1); stroke-width: 2; }
+  .chart-ring { fill: none; stroke: var(--text-primary); stroke-width: 1.5; }
+  .chart-scatter-dot { stroke: var(--surface-1); stroke-width: 1; opacity: 0.85; }
+  .chart-bar.hover { filter: brightness(1.12); }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-secondary); margin: 0 0 6px; }
+  .chart-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .chart-legend-swatch { width: 16px; height: 2px; border-radius: 1px; background: var(--swatch); }
+  .chart-legend-swatch.dash { background: repeating-linear-gradient(90deg, var(--swatch) 0 4px, transparent 4px 7px); }
+  .chart-legend-swatch.dot { width: 8px; height: 8px; border-radius: 50%; }
+  .heat-tooltip .tip-row { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .heat-tooltip .tip-swatch { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .season-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 8px; }
+  @media (max-width: 760px) { .season-grid { grid-template-columns: 1fr; gap: 8px; } }
+
+  .effect-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  .effect-row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-secondary); }
+  .effect-track { height: 10px; border-radius: 5px; background: var(--gridline); position: relative; overflow: hidden; }
+  .effect-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px; }
+  .effect-value { text-align: right; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  /* ---- rebalancing ---- */
+  #rebalance-map { height: 560px; width: 100%; border-radius: 8px; background: var(--control-bg); }
+  .legend-diverge { height: 10px; width: 140px; border-radius: 5px; flex: none; }
+  .rebalance-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 8px; }
+  @media (max-width: 760px) {
+    .rebalance-tables { grid-template-columns: 1fr; gap: 0; }
+    #rebalance-map { height: 440px; }
   }
-  .imp-row { display: grid; grid-template-columns: 108px 1fr 38px; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .data-table th { text-align: left; font-weight: 600; color: var(--text-muted); font-size: 11.5px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--gridline); color: var(--text-secondary); }
+  .data-table td.num, .data-table th.num { text-align: right; }
+  .data-table td strong { color: var(--text-primary); }
+  .data-table tr.highlight td { color: var(--text-primary); font-weight: 600; }
+  .metrics-table { max-width: 640px; margin-bottom: 8px; }
+
+  /* ---- forecast importance bars ---- */
+  .imp-row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; margin-bottom: 9px; }
   .imp-label { font-size: 12.5px; color: var(--text-secondary); }
   .imp-bar-track { height: 10px; border-radius: 5px; background: var(--gridline); overflow: hidden; }
-  .imp-bar { height: 100%; border-radius: 5px; background: var(--accent); }
+  .imp-bar { height: 100%; border-radius: 0 5px 5px 0; background: var(--accent); }
   .imp-value { font-size: 12px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
-  .roc-chart-wrap { max-width: 240px; margin: 0 auto; }
-  .roc-chart-wrap svg { width: 100%; height: auto; display: block; }
-  .roc-axis-label { font-size: 10px; fill: var(--text-muted); }
-  .roc-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 12px; color: var(--text-secondary); }
-  .roc-legend-item { display: flex; align-items: center; gap: 8px; }
-  .roc-legend-line { width: 16px; height: 2px; border-radius: 1px; flex: none; }
-  .confusion-grid {
-    display: grid;
-    grid-template-columns: auto repeat(2, 1fr);
-    gap: 4px;
-    font-size: 11.5px;
-  }
-  .cm-corner { }
-  .cm-col-label, .cm-row-label {
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 4px;
-    line-height: 1.25;
-  }
-  .cm-row-label { justify-content: flex-end; text-align: right; padding-right: 8px; }
-  .cm-cell {
-    border-radius: 6px;
-    padding: 12px 6px;
-    text-align: center;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-    background: var(--control-bg);
-    border: 1px solid var(--border);
-  }
-  .cm-cell.correct {
-    background: color-mix(in srgb, var(--accent) 16%, var(--control-bg));
-    border-color: var(--accent);
-  }
-  .cm-cell .cm-count { font-size: 14px; font-weight: 600; display: block; }
-  .cm-cell .cm-pct { font-size: 11px; opacity: 0.75; display: block; margin-top: 2px; }
-  .predict-note { margin-top: 20px; }
-  @media (max-width: 860px) {
-    .predict-grid { grid-template-columns: 1fr; }
-  }
 </style>
 </head>
 <body>
@@ -387,9 +387,10 @@
     <a class="wordmark" href="#top">NYC Citi Bike Analysis</a>
     <div class="links">
       <a href="#data">Data</a>
-      <a href="#when">Heatmap</a>
-      <a href="#where">Map</a>
-      <a href="#predict">Predict</a>
+      <a href="#when">When</a>
+      <a href="#where">Where</a>
+      <a href="#rebalance">Rebalancing</a>
+      <a href="#forecast">Forecast</a>
       <a href="#report">Report</a>
       <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">GitHub &#8599;</a>
     </div>
@@ -411,28 +412,28 @@
 
   <section class="section-block prose" id="data">
     <p class="section-kicker">01 &middot; The data</p>
-    <h2>One month of trips, one cleaning pipeline</h2>
+    <h2>A year of trips, one cleaning pipeline</h2>
     <p>
-      The trip data comes from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a> —
-      January 2024, downloaded directly from Citi Bike's S3 bucket at analysis time, no
-      data committed to the repo. Every number on this page and in the notebook comes
-      from one shared cleaning module (<code>scripts/pipeline.py</code>), so the ride
-      totals agree everywhere. Its rules, in order: drop duplicate rides, drop trips that
-      spill outside the claimed month at the file's edges, drop trips missing a start or
-      end station or coordinates, drop trips with non-positive duration, and drop trips
-      over 24 hours (Citi Bike's own definition of a lost/stolen bike, not a real ride).
-      That removes 6,498 of 1,888,085 raw rows (0.34%), leaving <strong>1,881,587</strong>.
+      The trip data is all of 2024 from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a>:
+      twelve monthly files downloaded from Citi Bike's S3 bucket at build time, with no data
+      committed to the repo. Every number on this page comes from one shared cleaning module
+      (<code>scripts/pipeline.py</code>), so totals agree across sections. Its rules, in order:
+      drop duplicate rides, drop trips that spill outside their month at the file's edges,
+      drop trips missing a start or end station or coordinates, drop trips with non-positive
+      duration, and drop trips over 24 hours (Citi Bike's own definition of a lost or stolen
+      bike). That removes 144,779 of 44,303,209 raw rows (0.33%), leaving
+      <strong>44,158,430</strong> trips.
     </p>
     <p>
-      The bike lane network layered into the map below is pulled live from NYC DOT's
-      <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a>
-      dataset on NYC Open Data — a separate dataset from Citi Bike's own trip/station
-      data, included to show ridership against the infrastructure it rides on.
+      Two outside datasets fill in context: hourly and daily weather from
+      <a href="https://www.ncei.noaa.gov/" target="_blank" rel="noopener">NOAA's</a> official Central Park
+      station, and NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">bike lane network</a>
+      from NYC Open Data, used to show ridership against the infrastructure it rides on.
     </p>
     <ul>
-      <li><code>CitiBike_Analysis.ipynb</code> — the pandas/matplotlib/seaborn exploratory analysis this page is built on.</li>
-      <li><code>scripts/</code> — the pipeline that turns a month of raw trip data into everything on this page.</li>
-      <li>Both charts below are plain HTML/CSS/JS; the map uses <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> for the basemap and heat layer.</li>
+      <li><code>scripts/</code>: the pipeline that turns a year of raw trip data into everything on this page, one build script per section.</li>
+      <li><code>CitiBike_Analysis.ipynb</code>: an exploratory deep-dive into January 2024, including a member-vs-casual classifier.</li>
+      <li>Charts are plain HTML/SVG/JS with no charting library; the maps use <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.</li>
     </ul>
   </section>
 
@@ -440,8 +441,8 @@
     <p class="section-kicker">02 &middot; When they ride</p>
     <h2>Ride Volume Heatmap</h2>
     <p class="section-lede">
-      Rides broken out by hour of day and day of week — the weekday commute rush shows
-      up as two sharp columns; weekends spread out into one broad midday window instead.
+      All of 2024's rides by hour of day and day of week. The weekday commute shows up as
+      two sharp columns at 8am and 5pm; weekends spread into one broad midday window.
     </p>
     <div class="card">
       <div class="stat-row" id="heatmap-stat-row"></div>
@@ -460,6 +461,31 @@
             <span class="ramp" id="ramp"></span>
             <span>More rides</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="subsection-title" id="seasons">Across the year: seasons and weather</h3>
+    <p class="section-lede">
+      The weekly rhythm sits on top of a much bigger seasonal swing. Daily rides more
+      than quadrupled from the coldest days to the best ones, and every rainy day shows
+      up as a dip. Weather here is NOAA's official Central Park station.
+    </p>
+    <div class="card">
+      <div class="stat-row" id="season-stat-row"></div>
+      <p class="chart-title">Rides per day, 2024</p>
+      <div class="chart-box" id="daily-chart"></div>
+      <div class="season-grid">
+        <div>
+          <p class="chart-title">Warmer days, more rides (until it gets hot)</p>
+          <p class="chart-subtitle">Average rides on dry weekdays, by the day's high temperature</p>
+          <div class="chart-box" id="temp-chart"></div>
+        </div>
+        <div>
+          <p class="chart-title">What weather costs</p>
+          <p class="chart-subtitle">Change in daily rides vs. a dry day with the same temperature and weekday</p>
+          <div class="effect-list" id="effect-list"></div>
+          <p class="chart-note" id="effect-note"></p>
         </div>
       </div>
     </div>
@@ -512,41 +538,83 @@
     <div class="boro-grid" id="boro-grid"></div>
   </section>
 
-  <section class="section-block" id="predict">
-    <p class="section-kicker">04 &middot; Predicting the rider</p>
-    <h2>Can the data guess who's riding?</h2>
+  <section class="section-block" id="rebalance">
+    <p class="section-kicker">04 &middot; Keeping bikes where they're needed</p>
+    <h2>Every weekday morning, bikes drain out of neighborhoods and pile up in Midtown</h2>
     <p class="section-lede">
-      The sections above found who/when/where differences at the group level —
-      averages across thousands of trips. Here a model tries something sharper: guess,
-      for one single ride, whether it belongs to a member or a casual rider, using
-      only that trip's duration, distance, timing, bike type, and how busy its start
-      and end stations are.
+      Every weekday morning, riders carry bikes from residential neighborhoods into
+      job centers, and every evening they carry them back. Stations that lose bikes
+      faster than they gain them run empty; stations that gain them run out of docks.
+      This shows each station's average net flow during the weekday rush, the
+      imbalance Citi Bike's rebalancing crews have to undo.
     </p>
     <div class="card">
-      <div class="stat-row" id="predict-stat-row"></div>
-      <div class="predict-grid">
-        <div class="predict-panel">
-          <p class="predict-panel-title">What predicts it</p>
-          <div class="importance-chart" id="importance-chart"></div>
-        </div>
-        <div class="predict-panel">
-          <p class="predict-panel-title">Model quality (ROC curve)</p>
-          <div class="roc-chart-wrap">
-            <svg id="roc-chart" viewBox="0 0 240 240" preserveAspectRatio="xMidYMid meet" role="img" aria-label="ROC curve comparing random forest and logistic regression"></svg>
-          </div>
-          <div class="roc-legend" id="roc-legend"></div>
-        </div>
-        <div class="predict-panel">
-          <p class="predict-panel-title">Random forest confusion matrix</p>
-          <div class="confusion-grid" id="confusion-grid"></div>
+      <div class="stat-row" id="rebalance-stat-row"></div>
+      <div class="controls">
+        <div class="toggle-group" role="group" aria-label="Rush hour">
+          <button class="toggle-btn" id="rush-am" aria-pressed="true" type="button">Morning rush (7&ndash;10am)</button>
+          <button class="toggle-btn" id="rush-pm" aria-pressed="false" type="button">Evening rush (4&ndash;7pm)</button>
         </div>
       </div>
-      <p class="section-lede predict-note">
-        Naive baseline: always guessing "member" already scores
-        <strong id="predict-baseline-accuracy"></strong> accuracy — and identifies zero
-        casual riders. The random forest's accuracy and AUC are shown above alongside
-        that baseline specifically so the headline number can't be mistaken for skill
-        it doesn't have.
+      <div id="rebalance-map"></div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="legend-diverge" id="diverge-ramp"></span>
+          <span id="diverge-label">Loses bikes &larr; balanced &rarr; gains bikes (avg per weekday rush)</span></div>
+      </div>
+      <div class="rebalance-tables">
+        <div>
+          <p class="chart-title">Biggest morning losers</p>
+          <p class="chart-subtitle">Need bikes delivered before 7am</p>
+          <table class="data-table" id="drainers-table"></table>
+        </div>
+        <div>
+          <p class="chart-title">Biggest morning gainers</p>
+          <p class="chart-subtitle">Need bikes removed, or they run out of docks</p>
+          <table class="data-table" id="fillers-table"></table>
+        </div>
+      </div>
+      <p class="chart-title">Bikes to move back each weekday morning, by month</p>
+      <div class="chart-box" id="rebalance-monthly"></div>
+      <p class="chart-note">
+        A lower bound: the sum of every losing station's average morning deficit. It ignores
+        dock capacity (not in the trip data), timing within the rush, and day-to-day variation.
+      </p>
+    </div>
+  </section>
+
+  <section class="section-block" id="forecast">
+    <p class="section-kicker">05 &middot; Forecasting demand</p>
+    <h2>Predicting tomorrow's departures, station by station</h2>
+    <p class="section-lede">
+      Rebalancing works better when crews know where demand is coming. A gradient-boosted
+      model predicts hourly departures for every station using only information available
+      the day before: the calendar, the weather, and each station's recent history. It
+      trains on January&ndash;October and is scored on November&ndash;December, months it never saw,
+      against the simple rules a planner would otherwise use.
+    </p>
+    <div class="card">
+      <div class="stat-row" id="forecast-stat-row"></div>
+      <p class="chart-title">Accuracy on the held-out months (Nov&ndash;Dec 2024)</p>
+      <p class="chart-subtitle">Mean absolute error in departures; lower is better</p>
+      <table class="data-table metrics-table" id="forecast-table"></table>
+      <p class="chart-title" id="example-title"></p>
+      <p class="chart-subtitle">Hourly departures for one week in December: actual vs. the model vs. "same hour last week"</p>
+      <div class="chart-box" id="example-chart"></div>
+      <div class="season-grid">
+        <div>
+          <p class="chart-title">Where the error is, by hour</p>
+          <p class="chart-subtitle">Mean absolute error per station-hour</p>
+          <div class="chart-box" id="error-hour-chart"></div>
+        </div>
+        <div>
+          <p class="chart-title">What the model relies on</p>
+          <p class="chart-subtitle">Increase in error when each input is shuffled (permutation importance)</p>
+          <div class="importance-chart" id="forecast-importance"></div>
+        </div>
+      </div>
+      <p class="chart-note">
+        Weather inputs are the observed weather. A production system would use the forecast
+        weather, so these results are an upper bound on what weather adds.
       </p>
     </div>
   </section>
@@ -644,7 +712,7 @@
   </section>
 
   <footer class="site-footer section-block">
-    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January 2024. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data. Basemaps: Esri, HERE, Garmin, &copy; OpenStreetMap contributors.</p>
+    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January&ndash;December 2024. Weather: NOAA NCEI, Central Park station. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data. Basemaps: Esri, HERE, Garmin, &copy; OpenStreetMap contributors.</p>
     <p>See the full analysis in <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">the repository</a>.</p>
   </footer>
 
@@ -658,7 +726,10 @@
 <script src="data/heatmap.js"></script>
 <script src="data/stations.js"></script>
 <script src="data/bike_paths.js"></script>
-<script src="data/model.js"></script>
+<script src="data/seasonality.js"></script>
+<script src="data/rebalancing.js"></script>
+<script src="data/forecast.js"></script>
+<script src="assets/charts.js"></script>
 <script>
 (function () {
   function isDark() {
@@ -677,6 +748,19 @@
     } catch (err) {
       console.error(`[${name}] failed to render`, err);
     }
+  }
+
+  // Esri's gray canvas basemaps: muted light/dark styles that need no API
+  // key (CARTO's basemaps started serving "API KEY REQUIRED" watermarks).
+  // Native tiles stop at z16; Leaflet upscales beyond that.
+  function basemapTiles(style, withAttribution) {
+    return L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`, {
+      attribution: withAttribution
+        ? 'Basemap &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        : "",
+      maxNativeZoom: 16,
+      maxZoom: 19,
+    });
   }
 
   // ================= overview stats =================
@@ -838,19 +922,6 @@
       document.getElementById("map").innerHTML = msg;
       document.getElementById("boro-grid").innerHTML = msg;
       return;
-    }
-
-    // Esri's gray canvas basemaps: muted light/dark styles that need no API
-    // key (CARTO's basemaps started serving "API KEY REQUIRED" watermarks).
-    // Native tiles stop at z16; Leaflet upscales beyond that.
-    function basemapTiles(style, withAttribution) {
-      return L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`, {
-        attribution: withAttribution
-          ? 'Basemap &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          : "",
-        maxNativeZoom: 16,
-        maxZoom: 19,
-      });
     }
 
     const map = L.map("map", { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
@@ -1071,7 +1142,7 @@
         <h3>${boro}</h3>
         <p class="boro-stats">${info ? `${info.stations.toLocaleString()} stations &middot; ${info.rides.toLocaleString()} rides (${(info.ride_share * 100).toFixed(1)}% of citywide)` : ""}</p>
         <div class="boro-map" id="boro-map-${boroSlug(boro)}"></div>
-        ${info && info.stations === 0 ? '<p class="boro-note">No Citi Bike stations here as of January 2024 — bike lanes shown for context.</p>' : ""}
+        ${info && info.stations === 0 ? '<p class="boro-note">No Citi Bike stations here in 2024 — bike lanes shown for context.</p>' : ""}
       `;
       boroGrid.appendChild(card);
     });
@@ -1147,107 +1218,307 @@
     }
   });
 
-  // ================= predict section =================
-  runSection("predict section", function () {
-    const m = window.MODEL_DATA;
-    if (!m) return;
-    const rf = m.random_forest;
-    const lr = m.logistic_regression;
+  // ---- shared series colors (validated per mode with the dataviz validator) ----
+  const BLUE = { light: "#2a78d6", dark: "#3987e5" };
+  const ORANGE = { light: "#eb6834", dark: "#d2611f" };
+  const RED = { light: "#e34948", dark: "#e66767" };
+  const GRAY = { light: "#8a8984", dark: "#8f8e89" };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const pct = (v, d = 0) => (v > 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
 
-    const stats = [
-      { label: "Random forest accuracy", value: (rf.accuracy * 100).toFixed(1) + "%" },
-      { label: "ROC-AUC", value: rf.roc_auc.toFixed(3) },
-      { label: "Casual riders identified", value: (rf.casual_recall * 100).toFixed(0) + "%" },
-      { label: "Naive baseline accuracy", value: (m.majority_baseline_accuracy * 100).toFixed(1) + "%" },
-    ];
-    const statRow = document.getElementById("predict-stat-row");
+  function statTiles(rowId, stats) {
+    const row = document.getElementById(rowId);
     stats.forEach(s => {
-      const el = document.createElement("div");
-      el.className = "stat-tile";
-      el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
-      statRow.appendChild(el);
+      const tile = document.createElement("div");
+      tile.className = "stat-tile";
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = s.label;
+      const value = document.createElement("div");
+      value.className = "value";
+      value.textContent = s.value;
+      tile.append(label, value);
+      row.appendChild(tile);
     });
-    document.getElementById("predict-baseline-accuracy").textContent = (m.majority_baseline_accuracy * 100).toFixed(1) + "%";
+  }
 
-    // ---- feature importance bars ----
-    const impChart = document.getElementById("importance-chart");
-    const maxImp = Math.max(...m.feature_importances.map(f => f.importance));
-    m.feature_importances.forEach(f => {
+  function fillTable(tableId, headers, rows) {
+    const table = document.getElementById(tableId);
+    table.textContent = "";
+    const thead = table.createTHead().insertRow();
+    headers.forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h.label;
+      if (h.num) th.className = "num";
+      thead.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    rows.forEach(r => {
+      const tr = tbody.insertRow();
+      if (r.highlight) tr.className = "highlight";
+      r.cells.forEach((c, i) => {
+        const td = tr.insertCell();
+        td.textContent = c;
+        if (headers[i].num) td.className = "num";
+      });
+    });
+  }
+
+  // ================= seasons & weather =================
+  runSection("seasonality section", function () {
+    const d = window.SEASONALITY_DATA;
+    const fmtDate = s => new Date(s + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    statTiles("season-stat-row", [
+      { label: "Busiest day", value: `${d.busiest_day.rides.toLocaleString()} (${fmtDate(d.busiest_day.date)})` },
+      { label: "Quietest day", value: `${d.quietest_day.rides.toLocaleString()} (${fmtDate(d.quietest_day.date)})` },
+      { label: "Avg weekday", value: d.avg_weekday_rides.toLocaleString() },
+      { label: "Avg weekend day", value: d.avg_weekend_rides.toLocaleString() },
+    ]);
+
+    const days = d.daily;
+    const rolling = days.map((_, i) => {
+      if (i < 6) return null;
+      let sum = 0;
+      for (let k = i - 6; k <= i; k++) sum += days[k].rides;
+      return sum / 7;
+    });
+    const monthStarts = [];
+    days.forEach((r, i) => { if (r.date.endsWith("-01")) monthStarts.push({ x: i, label: MONTHS[+r.date.slice(5, 7) - 1] }); });
+    Charts.lineChart(document.getElementById("daily-chart"), {
+      x: days.map((_, i) => i),
+      series: [
+        { name: "Daily rides", color: BLUE, values: days.map(r => r.rides), width: 1.25, opacity: 0.45 },
+        { name: "7-day average", color: BLUE, values: rolling, width: 2.5 },
+      ],
+      xTicks: monthStarts,
+      xTitle: i => {
+        const r = days[i];
+        const wx = r.snow_mm > 0 ? `${r.snow_mm} mm snow` : r.precip_mm >= 1 ? `${r.precip_mm} mm rain` : "dry";
+        return `${fmtDate(r.date)} · high ${r.tmax_c}°C, ${wx}`;
+      },
+      valueFormat: v => Math.round(v).toLocaleString(),
+      height: 240, ariaLabel: "Daily Citi Bike rides across 2024 with a 7-day average",
+    });
+
+    const bins = d.dry_weekday_by_tmax_5c.filter(b => b.days >= 3);
+    Charts.barChart(document.getElementById("temp-chart"), {
+      bars: bins.map(b => ({
+        label: `${b.tmax_from_c}°`,
+        value: b.avg_rides,
+        title: `High of ${b.tmax_from_c} to ${b.tmax_from_c + 5}°C (${b.days} dry weekdays)`,
+      })),
+      color: BLUE, valueLabel: "avg rides per day", valueFormat: v => Math.round(v).toLocaleString(),
+      height: 220, margin: { left: 56 }, ariaLabel: "Average rides on dry weekdays by daily high temperature",
+    });
+
+    const m = d.model;
+    const effects = [
+      { label: `Light rain (${d.thresholds_mm.light_rain}–${d.thresholds_mm.heavy_rain} mm)`, v: m.light_rain_effect },
+      { label: `Heavy rain (${d.thresholds_mm.heavy_rain}+ mm)`, v: m.heavy_rain_effect },
+      { label: "Snow", v: m.snow_effect },
+      { label: "Federal holiday", v: m.holiday_effect },
+    ];
+    const list = document.getElementById("effect-list");
+    function paintEffects() {
+      list.textContent = "";
+      effects.forEach(e => {
+        const row = document.createElement("div");
+        row.className = "effect-row";
+        const label = document.createElement("span");
+        label.textContent = e.label;
+        const track = document.createElement("div");
+        track.className = "effect-track";
+        const bar = document.createElement("div");
+        bar.className = "effect-bar";
+        bar.style.width = Math.min(100, Math.abs(e.v) * 200) + "%";  // full track = -50%
+        bar.style.background = Charts.pick(ORANGE);
+        track.appendChild(bar);
+        const val = document.createElement("span");
+        val.className = "effect-value";
+        val.textContent = pct(e.v);
+        row.append(label, track, val);
+        list.appendChild(row);
+      });
+    }
+    paintEffects();
+    Charts.onSchemeChange(paintEffects);
+    document.getElementById("effect-note").textContent =
+      `From a log-linear model of daily rides on day of week, holidays, temperature, rain, snow and the system's growth over the year (R² ${m.r2.toFixed(2)}). ` +
+      `Holding those fixed, ridership grew about ${Math.round(m.annual_growth * 100)}% from January to December.`;
+  });
+
+  // ================= rebalancing =================
+  runSection("rebalancing section", function () {
+    const d = window.REBALANCING_DATA;
+    statTiles("rebalance-stat-row", [
+      { label: "Bikes to move back, per weekday morning", value: d.bikes_to_move_am.toLocaleString() },
+      { label: "Stations losing 2+ bikes each morning", value: d.drainer_count.toLocaleString() },
+      { label: "Stations gaining 2+", value: d.filler_count.toLocaleString() },
+      { label: "Morning vs. evening flow correlation", value: d.am_pm_correlation.toFixed(2) },
+    ]);
+
+    const rows = list => list.map((s, i) => ({
+      cells: [String(i + 1), `${s.name} (${s.boro})`, (s.am_net > 0 ? "+" : "") + s.am_net.toFixed(0), `${s.am_dep.toFixed(0)} → ${s.am_arr.toFixed(0)}`],
+    }));
+    const headers = [{ label: "#" }, { label: "Station" }, { label: "Net bikes", num: true }, { label: "Out → in", num: true }];
+    fillTable("drainers-table", headers, rows(d.top_drainers));
+    fillTable("fillers-table", headers, rows(d.top_fillers));
+
+    Charts.barChart(document.getElementById("rebalance-monthly"), {
+      bars: d.monthly.map(m => ({ label: MONTHS[m.month - 1], value: m.bikes_to_move_am, title: `${MONTHS[m.month - 1]} 2024` })),
+      color: BLUE, valueLabel: "bikes per weekday morning", valueFormat: v => Math.round(v).toLocaleString(),
+      height: 200, ariaLabel: "Bikes to move back each weekday morning, by month",
+    });
+
+    // diverging color: red = loses bikes, gray = balanced, blue = gains bikes
+    const MID = { light: "#d9d8d4", dark: "#4a4a46" };
+    const LIMIT = 20;  // bikes per rush; anything beyond saturates
+    function mix(a, b, t) {
+      const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+      const pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+      return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join("");
+    }
+    function divergeColor(net) {
+      const t = Math.max(-1, Math.min(1, net / LIMIT));
+      const mid = Charts.pick(MID);
+      return t < 0 ? mix(mid, Charts.pick(RED), -t) : mix(mid, Charts.pick(BLUE), t);
+    }
+    function paintRamp() {
+      document.getElementById("diverge-ramp").style.background =
+        `linear-gradient(to right, ${Charts.pick(RED)}, ${Charts.pick(MID)}, ${Charts.pick(BLUE)})`;
+    }
+    paintRamp();
+    Charts.onSchemeChange(paintRamp);
+
+    if (typeof L === "undefined") {
+      document.getElementById("rebalance-map").innerHTML =
+        '<p class="map-fallback">The map library (Leaflet) couldn\'t load, so this map is unavailable. The tables below still show the biggest imbalances.</p>';
+      return;
+    }
+    const map = L.map("rebalance-map", { scrollWheelZoom: false, preferCanvas: true });
+    const nyc = d.stations.filter(s => s.b !== "Other");
+    map.fitBounds(L.latLngBounds(nyc.map(s => [s.lat, s.lng])), { padding: [24, 24] });
+    let tiles = null;
+    function applyTiles() {
+      if (tiles) map.removeLayer(tiles);
+      tiles = basemapTiles(Charts.isDark() ? "World_Dark_Gray_Base" : "World_Light_Gray_Base", true).addTo(map);
+    }
+    applyTiles();
+
+    let rush = "am";
+    let layer = null;
+    function paintStations() {
+      if (layer) map.removeLayer(layer);
+      // biggest first so small stations stay visible on top
+      const ordered = nyc.slice().sort((a, b) => Math.abs(b[rush]) - Math.abs(a[rush]));
+      layer = L.layerGroup(ordered.map(s => {
+        const net = s[rush];
+        const marker = L.circleMarker([s.lat, s.lng], {
+          radius: 2.5 + Math.sqrt(Math.min(Math.abs(net), 100)) * 1.2,
+          fillColor: divergeColor(net), fillOpacity: 0.9,
+          color: Charts.isDark() ? "#1a1a19" : "#ffffff", weight: 0.75,
+        });
+        const verb = net < 0 ? "loses" : "gains";
+        const tip = document.createElement("div");
+        const b = document.createElement("b");
+        b.textContent = s.n;
+        tip.append(b, document.createElement("br"),
+          document.createTextNode(`${verb} ${Math.abs(net).toFixed(1)} bikes per weekday ${rush === "am" ? "morning" : "evening"} rush`));
+        marker.bindTooltip(tip, { className: "station-tip", direction: "top", offset: [0, -4] });
+        return marker;
+      })).addTo(map);
+    }
+    paintStations();
+
+    const amBtn = document.getElementById("rush-am"), pmBtn = document.getElementById("rush-pm");
+    function setRush(r) {
+      rush = r;
+      amBtn.setAttribute("aria-pressed", String(r === "am"));
+      pmBtn.setAttribute("aria-pressed", String(r === "pm"));
+      paintStations();
+    }
+    amBtn.addEventListener("click", () => setRush("am"));
+    pmBtn.addEventListener("click", () => setRush("pm"));
+    Charts.onSchemeChange(() => { applyTiles(); paintStations(); });
+  });
+
+  // ================= demand forecast =================
+  runSection("forecast section", function () {
+    const f = window.FORECAST_DATA;
+    const h = f.hourly, dly = f.daily;
+    statTiles("forecast-stat-row", [
+      { label: "Model error per station-hour", value: h.model.mae.toFixed(2) + " rides" },
+      { label: "vs. same hour last week", value: pct(-f.improvement_vs_naive_hourly) + " error" },
+      { label: "vs. station's usual level", value: pct(-f.improvement_vs_profile_hourly) + " error" },
+      { label: "Stations forecast", value: f.stations.toLocaleString() },
+    ]);
+
+    const fmt = v => v.toFixed(2);
+    const fmtPct = v => (v * 100).toFixed(0) + "%";
+    fillTable("forecast-table",
+      [{ label: "Method" }, { label: "Hourly MAE", num: true }, { label: "Hourly WMAPE", num: true }, { label: "Daily MAE", num: true }],
+      [
+        { highlight: true, cells: ["Gradient-boosted model", fmt(h.model.mae), fmtPct(h.model.wmape), fmt(dly.model.mae)] },
+        { cells: ["Station's usual level (hour × weekday/weekend)", fmt(h.station_profile.mae), fmtPct(h.station_profile.wmape), fmt(dly.station_profile.mae)] },
+        { cells: ["Same hour last week", fmt(h.seasonal_naive.mae), fmtPct(h.seasonal_naive.wmape), fmt(dly.seasonal_naive.mae)] },
+        { cells: ["Same hour yesterday", fmt(h.yesterday.mae), fmtPct(h.yesterday.wmape), "–"] },
+      ]);
+
+    const ex = f.example.series;
+    document.getElementById("example-title").textContent = `Example: ${f.example.station}, the busiest station in the test period`;
+    const dayTicks = [];
+    ex.forEach((p, i) => {
+      if (p.t.endsWith("T00")) {
+        const dt = new Date(p.t + ":00:00");
+        dayTicks.push({ x: i, label: dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }) });
+      }
+    });
+    Charts.lineChart(document.getElementById("example-chart"), {
+      x: ex.map((_, i) => i),
+      series: [
+        { name: "Actual", color: BLUE, values: ex.map(p => p.actual) },
+        { name: "Model", color: ORANGE, values: ex.map(p => p.pred) },
+        { name: "Same hour last week", color: GRAY, values: ex.map(p => p.naive), dash: "4 3", width: 1.5 },
+      ],
+      xTicks: dayTicks,
+      xTitle: i => new Date(ex[i].t + ":00:00").toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric" }),
+      valueFormat: v => (Math.round(v * 10) / 10).toLocaleString(),
+      height: 240, ariaLabel: "Hourly departures for one station over one week: actual, model and last week",
+    });
+
+    Charts.lineChart(document.getElementById("error-hour-chart"), {
+      x: f.by_hour.map(r => r.hour),
+      series: [
+        { name: "Model", color: ORANGE, values: f.by_hour.map(r => r.model_mae) },
+        { name: "Same hour last week", color: GRAY, values: f.by_hour.map(r => r.naive_mae), dash: "4 3", width: 1.5 },
+      ],
+      xTicks: [0, 6, 12, 18, 23].map(x => ({ x, label: x === 0 ? "12am" : x === 12 ? "12pm" : x < 12 ? x + "am" : (x - 12) + "pm" })),
+      xTitle: i => `${i}:00`,
+      valueFormat: v => v.toFixed(2),
+      height: 220, ariaLabel: "Mean absolute error by hour of day, model vs. last week",
+    });
+
+    const imp = document.getElementById("forecast-importance");
+    const shown = f.feature_importances.filter(x => x.importance > 0);
+    const maxImp = Math.max(...shown.map(x => x.importance));
+    shown.forEach(x => {
       const row = document.createElement("div");
       row.className = "imp-row";
-      const pct = (f.importance / maxImp) * 100;
-      row.innerHTML = `
-        <span class="imp-label">${f.label}</span>
-        <div class="imp-bar-track"><div class="imp-bar" style="width:${pct}%"></div></div>
-        <span class="imp-value">${(f.importance * 100).toFixed(1)}%</span>
-      `;
-      impChart.appendChild(row);
+      const label = document.createElement("span");
+      label.className = "imp-label";
+      label.textContent = x.label;
+      const track = document.createElement("div");
+      track.className = "imp-bar-track";
+      const bar = document.createElement("div");
+      bar.className = "imp-bar";
+      bar.style.width = (x.importance / maxImp) * 100 + "%";
+      track.appendChild(bar);
+      const val = document.createElement("span");
+      val.className = "imp-value";
+      val.textContent = "+" + x.importance.toFixed(3);
+      row.append(label, track, val);
+      imp.appendChild(row);
     });
-
-    // ---- ROC curve ----
-    const BLUE_LIGHT = "#2a78d6", BLUE_DARK = "#3987e5";
-    const ORANGE_LIGHT = "#eb6834", ORANGE_DARK = "#d2611f";
-    const PAD = 24, SIZE = 240, PLOT = SIZE - PAD * 2;
-
-    function toPath(curve) {
-      return curve.map((p, i) => `${i === 0 ? "M" : "L"} ${(PAD + p.fpr * PLOT).toFixed(1)} ${(PAD + (1 - p.tpr) * PLOT).toFixed(1)}`).join(" ");
-    }
-
-    const rocSvg = document.getElementById("roc-chart");
-    const rocLegend = document.getElementById("roc-legend");
-
-    function paintRoc() {
-      const dark = isDark();
-      const blue = dark ? BLUE_DARK : BLUE_LIGHT;
-      const orange = dark ? ORANGE_DARK : ORANGE_LIGHT;
-      rocSvg.innerHTML = `
-        <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${SIZE - PAD}" stroke="var(--gridline)" stroke-width="1" />
-        <line x1="${PAD}" y1="${SIZE - PAD}" x2="${SIZE - PAD}" y2="${SIZE - PAD}" stroke="var(--gridline)" stroke-width="1" />
-        <line x1="${PAD}" y1="${SIZE - PAD}" x2="${SIZE - PAD}" y2="${PAD}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3,3" />
-        <path d="${toPath(lr.roc_curve)}" fill="none" stroke="${orange}" stroke-width="2" stroke-linejoin="round" />
-        <path d="${toPath(rf.roc_curve)}" fill="none" stroke="${blue}" stroke-width="2" stroke-linejoin="round" />
-        <text class="roc-axis-label" x="${PAD - 2}" y="${SIZE - PAD + 14}">0</text>
-        <text class="roc-axis-label" x="${SIZE - PAD - 6}" y="${SIZE - PAD + 14}">1</text>
-        <text class="roc-axis-label" x="${PAD - 16}" y="${SIZE - PAD + 2}">0</text>
-        <text class="roc-axis-label" x="${PAD - 16}" y="${PAD + 6}">1</text>
-        <text class="roc-axis-label" x="${SIZE / 2 - 34}" y="${SIZE - 2}">False positive rate</text>
-      `;
-      rocLegend.innerHTML = `
-        <div class="roc-legend-item"><span class="roc-legend-line" style="background:${blue}"></span> Random forest (AUC ${rf.roc_auc.toFixed(3)})</div>
-        <div class="roc-legend-item"><span class="roc-legend-line" style="background:${orange}"></span> Logistic regression (AUC ${lr.roc_auc.toFixed(3)})</div>
-        <div class="roc-legend-item"><span class="roc-legend-line" style="background:var(--text-muted); opacity:0.5"></span> Random guessing</div>
-      `;
-    }
-    paintRoc();
-    if (window.matchMedia) {
-      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintRoc);
-    }
-
-    // ---- confusion matrix ----
-    const cm = m.confusion_matrix;
-    const [[casualToCasual, casualToMember], [memberToCasual, memberToMember]] = cm.matrix;
-    const casualTotal = casualToCasual + casualToMember;
-    const memberTotal = memberToCasual + memberToMember;
-
-    function cmCell(count, rowTotal, correct) {
-      const pct = ((count / rowTotal) * 100).toFixed(0);
-      return `<div class="cm-cell${correct ? " correct" : ""}">
-        <span class="cm-count">${count.toLocaleString()}</span>
-        <span class="cm-pct">${pct}% of actual</span>
-      </div>`;
-    }
-
-    document.getElementById("confusion-grid").innerHTML = `
-      <div class="cm-corner"></div>
-      <div class="cm-col-label">Predicted<br>casual</div>
-      <div class="cm-col-label">Predicted<br>member</div>
-      <div class="cm-row-label">Actual<br>casual</div>
-      ${cmCell(casualToCasual, casualTotal, true)}
-      ${cmCell(casualToMember, casualTotal, false)}
-      <div class="cm-row-label">Actual<br>member</div>
-      ${cmCell(memberToCasual, memberTotal, false)}
-      ${cmCell(memberToMember, memberTotal, true)}
-    `;
   });
 })();
 </script>

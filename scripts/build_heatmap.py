@@ -3,8 +3,7 @@ Rebuild the ride-volume heatmap (docs/data/heatmap.json + .js, docs/assets/heatm
 from a month of Citi Bike trip data. Loading and cleaning come from
 scripts/pipeline.py, shared with the notebook and the other build scripts.
 
-Usage: python scripts/build_heatmap.py [YYYYMM]
-       python scripts/build_heatmap.py 202401   # defaults to this if omitted
+Usage: python scripts/build_heatmap.py [YYYY | YYYYMM]   # defaults to 2024
 """
 
 import json
@@ -19,7 +18,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
 
-from pipeline import DEFAULT_MONTH, load_clean_month, month_label
+from pipeline import DEFAULT_PERIOD, load_clean_period, period_label
 
 REPO = Path(__file__).resolve().parent.parent
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -73,9 +72,9 @@ def write_png(heat: pd.DataFrame, label: str) -> None:
 
 
 def main() -> None:
-    yyyymm = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MONTH
-    label = month_label(yyyymm)
-    df = load_clean_month(yyyymm)
+    period = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PERIOD
+    label = period_label(period)
+    df = load_clean_period(period, columns=["started_at"])
 
     heat = build_heat_matrix(df)
     write_site_data(heat, total_rides=len(df), label=label)

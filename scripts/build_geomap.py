@@ -6,7 +6,7 @@ slider), plus a trimmed copy of NYC DOT's bike route network.
 Loading and cleaning come from scripts/pipeline.py, shared with the notebook
 and the other build scripts, so the ride totals agree everywhere.
 
-Usage: python scripts/build_geomap.py [YYYYMM]
+Usage: python scripts/build_geomap.py [YYYY | YYYYMM]   # defaults to 2024
 """
 
 import json
@@ -17,7 +17,7 @@ import pandas as pd
 import requests
 from shapely.geometry import Point, shape
 
-from pipeline import DEFAULT_MONTH, load_clean_month, month_label
+from pipeline import DEFAULT_PERIOD, load_clean_period, period_label
 
 REPO = Path(__file__).resolve().parent.parent
 BIKE_ROUTES_URL = (
@@ -30,23 +30,22 @@ BORO_BOUNDARIES_URL = "https://data.cityofnewyork.us/resource/gthc-hcne.geojson"
 BORO_NAMES = {"1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island"}
 
 
-def build_stations(df: pd.DataFrame) -> dict:
-    df = df.copy()
-    df["hour"] = df["started_at"].dt.hour
+def build_stations(df: pd.DataFrame) -> list:
+    hour = df["started_at"].dt.hour.rename("hour")
+    name = df["start_station_name"]
+    hourly = df.groupby([name, hour], observed=True).size().unstack(fill_value=0).reindex(columns=range(24), fill_value=0)
+    coords = df.groupby(name, observed=True)[["start_lat", "start_lng"]].median()
 
-    grouped = df.groupby("start_station_name")
-    stations = []
-    for name, g in grouped:
-        hourly = g.groupby("hour").size().reindex(range(24), fill_value=0).tolist()
-        stations.append(
-            {
-                "name": name,
-                "lat": round(float(g["start_lat"].median()), 6),
-                "lng": round(float(g["start_lng"].median()), 6),
-                "total": int(len(g)),
-                "hourly": hourly,
-            }
-        )
+    stations = [
+        {
+            "name": str(st),
+            "lat": round(float(coords.at[st, "start_lat"]), 6),
+            "lng": round(float(coords.at[st, "start_lng"]), 6),
+            "total": int(row.sum()),
+            "hourly": [int(v) for v in row.tolist()],
+        }
+        for st, row in hourly.iterrows()
+    ]
     stations.sort(key=lambda s: -s["total"])
     return stations
 
@@ -91,6 +90,15 @@ def write_bike_routes() -> int:
         if isinstance(coords[0], (int, float)):
             return [round(c, 5) for c in coords]
         return [round_coords(c) for c in coords]
+
+    # the live feed occasionally includes segments with no geometry; drop them
+    before = len(geo["features"])
+    geo["features"] = [
+        f for f in geo["features"]
+        if f.get("geometry") and f["geometry"].get("coordinates") and all(f["geometry"]["coordinates"])
+    ]
+    if len(geo["features"]) < before:
+        print(f"Dropped {before - len(geo['features'])} bike route segment(s) with empty geometry", flush=True)
 
     for feat in geo["features"]:
         feat["geometry"]["coordinates"] = round_coords(feat["geometry"]["coordinates"])
@@ -138,9 +146,9 @@ def write_summary(stations: list, bike_lane_segments: int, label: str) -> None:
 
 
 def main() -> None:
-    yyyymm = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MONTH
-    label = month_label(yyyymm)
-    df = load_clean_month(yyyymm)
+    period = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PERIOD
+    label = period_label(period)
+    df = load_clean_period(period, columns=["started_at", "start_station_name", "start_lat", "start_lng"])
 
     stations = build_stations(df)
     assign_boroughs(stations)

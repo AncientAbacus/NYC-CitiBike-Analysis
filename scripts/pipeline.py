@@ -7,8 +7,12 @@ This module is the single source of truth for what counts as a "ride". Every
 number on the site and in the notebook comes from a DataFrame produced by
 `load_clean_month()`, so the ride totals agree everywhere.
 
-The downloaded zip is cached in `.cache/` (gitignored) so running several
-build scripts back to back only downloads the month once.
+Downloads (monthly zips, cleaned per-month parquet, NOAA weather) are cached
+in `.cache/` (gitignored) so running several build scripts back to back only
+downloads and cleans each month once.
+
+A "period" is either a month (`YYYYMM`, e.g. 202401) or a full year (`YYYY`,
+e.g. 2024); every build script accepts either.
 """
 
 import io
@@ -23,6 +27,7 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 REPO = Path(__file__).resolve().parent.parent
 CACHE_DIR = REPO / ".cache"
 DEFAULT_MONTH = "202401"
+DEFAULT_PERIOD = "2024"
 
 STATION_COLS = ["start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng"]
 RUSH_HOURS = {7, 8, 9, 16, 17, 18, 19}
@@ -57,6 +62,19 @@ FEATURE_LABELS = {
 
 def month_label(yyyymm: str) -> str:
     return pd.Period(yyyymm, freq="M").strftime("%B %Y")
+
+
+def period_months(period: str) -> list:
+    """`2024` -> ['202401', ..., '202412']; `202401` -> ['202401']."""
+    if len(period) == 4:
+        return [f"{period}{m:02d}" for m in range(1, 13)]
+    if len(period) == 6:
+        return [period]
+    raise ValueError(f"period must be YYYY or YYYYMM, got {period!r}")
+
+
+def period_label(period: str) -> str:
+    return period if len(period) == 4 else month_label(period)
 
 
 def _month_zip(yyyymm: str) -> bytes:
@@ -124,6 +142,109 @@ def clean(df: pd.DataFrame, yyyymm: str = DEFAULT_MONTH, verbose: bool = True) -
 
 def load_clean_month(yyyymm: str = DEFAULT_MONTH) -> pd.DataFrame:
     return clean(load_month(yyyymm), yyyymm)
+
+
+# Columns kept in the per-month cleaned cache: everything any analysis reads.
+CLEAN_COLS = [
+    "started_at", "ended_at", "trip_minutes", "member_casual", "rideable_type",
+    "start_station_name", "end_station_name", "start_lat", "start_lng", "end_lat", "end_lng",
+]
+
+
+def clean_month_path(yyyymm: str) -> Path:
+    """Clean one month and cache it as parquet (only once); return the path."""
+    out = CACHE_DIR / "clean" / f"{yyyymm}.parquet"
+    if not out.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        print(f"== {yyyymm}", flush=True)
+        df = load_clean_month(yyyymm)[CLEAN_COLS]
+        for col in ("member_casual", "rideable_type", "start_station_name", "end_station_name"):
+            df[col] = df[col].astype("category")
+        df.to_parquet(out, index=False)
+    return out
+
+
+def load_clean_period(period: str = DEFAULT_PERIOD, columns=None) -> pd.DataFrame:
+    """Cleaned trips for a month or a whole year, optionally only some columns.
+
+    Each month is cleaned on its own (trips are assigned to the month they
+    start in), then concatenated.
+    """
+    paths = [clean_month_path(m) for m in period_months(period)]
+    dfs = [pd.read_parquet(p, columns=columns) for p in paths]
+    # re-unify categoricals across months so concat doesn't fall back to object
+    for col in ("member_casual", "rideable_type", "start_station_name", "end_station_name"):
+        if all(col in d for d in dfs):
+            cats = sorted(set().union(*(d[col].cat.categories for d in dfs)))
+            for d in dfs:
+                d[col] = d[col].cat.set_categories(cats)
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"{period_label(period)}: {len(df):,} cleaned trips", flush=True)
+    return df
+
+
+# ---- weather: NOAA observations at the Central Park station ----
+NOAA_API = "https://www.ncei.noaa.gov/access/services/data/v1"
+CENTRAL_PARK_LCD = "72505394728"
+CENTRAL_PARK_GHCND = "USW00094728"
+
+
+def _noaa_csv(name: str, params: dict) -> pd.DataFrame:
+    CACHE_DIR.mkdir(exist_ok=True)
+    path = CACHE_DIR / name
+    if not path.exists():
+        print(f"Downloading NOAA {params['dataset']} ...", flush=True)
+        resp = requests.get(NOAA_API, params={**params, "format": "csv", "units": "metric"}, timeout=300)
+        resp.raise_for_status()
+        path.write_text(resp.text)
+    return pd.read_csv(path, low_memory=False)
+
+
+def _noaa_number(series: pd.Series) -> pd.Series:
+    # LCD values can carry an "s" (suspect) suffix; "T" is a trace of precipitation
+    s = series.astype(str).str.strip().str.rstrip("s").replace({"T": "0.01", "": None, "nan": None})
+    return pd.to_numeric(s, errors="coerce")
+
+
+def load_weather_hourly(year: str) -> pd.DataFrame:
+    """One row per hour of `year`: temp_c, precip_mm, wind_ms (Central Park, NOAA LCD).
+
+    Uses the routine hourly reports (FM-15) only. An observation at hh:51
+    is assigned to hour hh. Gaps are filled by interpolation (temp/wind) or 0 (precip).
+    """
+    raw = _noaa_csv(f"noaa_lcd_{year}.csv", {
+        "dataset": "local-climatological-data", "stations": CENTRAL_PARK_LCD,
+        "startDate": f"{year}-01-01", "endDate": f"{year}-12-31",
+        "dataTypes": "HourlyDryBulbTemperature,HourlyPrecipitation,HourlyWindSpeed",
+    })
+    raw = raw[raw["REPORT_TYPE"].astype(str).str.strip() == "FM-15"]
+    df = pd.DataFrame({
+        "hour_start": pd.to_datetime(raw["DATE"]).dt.floor("h"),
+        "temp_c": _noaa_number(raw["HourlyDryBulbTemperature"]),
+        "precip_mm": _noaa_number(raw["HourlyPrecipitation"]),
+        "wind_ms": _noaa_number(raw["HourlyWindSpeed"]),
+    }).groupby("hour_start").mean()
+    hours = pd.date_range(f"{year}-01-01", f"{int(year) + 1}-01-01", freq="h", inclusive="left")
+    df = df.reindex(hours)
+    df["temp_c"] = df["temp_c"].interpolate(limit_direction="both")
+    df["wind_ms"] = df["wind_ms"].interpolate(limit_direction="both")
+    df["precip_mm"] = df["precip_mm"].fillna(0.0)
+    df.index.name = "hour_start"
+    return df.reset_index()
+
+
+def load_weather_daily(year: str) -> pd.DataFrame:
+    """One row per day: tmax_c, tmin_c, precip_mm, snow_mm (Central Park, NOAA GHCN-Daily)."""
+    raw = _noaa_csv(f"noaa_daily_{year}.csv", {
+        "dataset": "daily-summaries", "stations": CENTRAL_PARK_GHCND,
+        "startDate": f"{year}-01-01", "endDate": f"{year}-12-31",
+        "dataTypes": "TMAX,TMIN,PRCP,SNOW",
+    })
+    return pd.DataFrame({
+        "date": pd.to_datetime(raw["DATE"]),
+        "tmax_c": raw["TMAX"], "tmin_c": raw["TMIN"],
+        "precip_mm": raw["PRCP"].fillna(0.0), "snow_mm": raw["SNOW"].fillna(0.0),
+    })
 
 
 def haversine_km(lat1, lng1, lat2, lng2) -> np.ndarray:
