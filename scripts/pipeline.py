@@ -303,3 +303,30 @@ def engineer_features(df: pd.DataFrame, yyyymm: str = DEFAULT_MONTH) -> pd.DataF
 
     df["is_member"] = (df["member_casual"] == "member").astype(int)
     return df
+
+
+def target_encode_oof(df: pd.DataFrame, keys: list, target: str, train: pd.Series,
+                      folds: pd.Series, smoothing: float = 50.0) -> np.ndarray:
+    """Leak-free target encoding: the smoothed mean of `target` per `keys` group.
+
+    Training rows get the rate computed from the *other* folds only (out-of-
+    fold), so a row's own label never feeds its own feature; non-training rows
+    get the rate from all training rows. Groups with few rows shrink toward the
+    overall training mean (`smoothing` = pseudo-count). Computing the rate on
+    all training rows including each row itself leaks the label: the model
+    learns to over-trust the column and does worse on new data.
+    """
+    prior = df.loc[train, target].mean()
+    key = pd.MultiIndex.from_frame(df[keys]) if len(keys) > 1 else pd.Index(df[keys[0]])
+    out = np.full(len(df), np.nan)
+
+    def rates(mask):
+        g = df.loc[mask].groupby(keys, observed=True)[target].agg(["sum", "count"])
+        return (g["sum"] + smoothing * prior) / (g["count"] + smoothing)
+
+    train = train.to_numpy()
+    for f in np.unique(folds[train]):
+        in_fold = train & (folds.to_numpy() == f)
+        out[in_fold] = rates(train & ~in_fold).reindex(key[in_fold]).to_numpy()
+    out[~train] = rates(train).reindex(key[~train]).to_numpy()
+    return np.where(np.isnan(out), prior, out)

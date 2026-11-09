@@ -46,7 +46,7 @@ Nothing is committed; everything downloads at build time into gitignored `.cache
 
 1. **Load / Clean** — `pipeline.load_month()` and `pipeline.clean()` (duplicate `ride_id`s, out-of-month spillover, missing station/coordinates, non-positive durations, trips over 24h, in that order; `trip_minutes` must exist before the duration filters).
 2. **EDA** — trip duration distribution, member vs. casual mix, ride timing by hour (normalized per group), average duration by rider type, day × hour heatmap, top 15 start stations.
-3. **Predicting Rider Type** — `pipeline.engineer_features()`, then `LogisticRegression` and `RandomForestClassifier` (both `class_weight="balanced"`) on `member_casual`. Leans on ROC-AUC and casual-class recall because "always guess member" already scores 89% accuracy.
+3. **Predicting Rider Type** — `pipeline.engineer_features()` plus weather, day of week, and station/route casual rates encoded **out-of-fold** with `pipeline.target_encode_oof()` (computing them on all training rows leaked each trip's own label and dropped test AUC from 0.73 to 0.69), and route-relative duration. Time split: train Jan 1–24, test Jan 25–31. Unweighted `LogisticRegression` and `HistGradientBoostingClassifier`; the GBM reaches 89.6% accuracy vs. 89.1% for "always member", ROC-AUC 0.77, and 6.8x lift in the top 1% (75% casual). Evaluation leads with AUC, PR-AUC, a threshold table and lift, because accuracy can barely move above the 89% majority rate. The same model on all of 2024 lands at AUC ~0.76, so the ceiling is the data (casual commuters look like members), not volume.
 
 Member vs. casual riders use a fixed color convention (`{"member": "#2a78d6", "casual": "#eb6834"}`).
 

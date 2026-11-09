@@ -102,3 +102,13 @@ def test_compact_bike_routes_merges_and_keeps_needed_properties():
     first = next(f for f in out["features"] if f["properties"]["street"] == "1 AV")
     assert first["properties"] == {"street": "1 AV", "facilitycl": "I", "boro_name": "Manhattan"}
     assert len(first["geometry"]["coordinates"]) == 1  # the two touching pieces were joined
+
+
+def test_target_encode_oof_never_uses_a_rows_own_label():
+    # one station, two folds; each training row's encoding must come only from the other fold
+    df = pd.DataFrame({"station": ["A"] * 4 + ["A"], "y": [1, 1, 0, 0, 1]})
+    train = pd.Series([True, True, True, True, False])
+    folds = pd.Series([0, 0, 1, 1, -1])
+    enc = pipeline.target_encode_oof(df, ["station"], "y", train, folds, smoothing=0.0)
+    assert list(enc[:4]) == [0.0, 0.0, 1.0, 1.0]   # fold 0 sees only fold 1's zeros, and vice versa
+    assert enc[4] == 0.5                           # held-out row sees all training rows
