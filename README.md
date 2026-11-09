@@ -1,124 +1,102 @@
-# NYC Citi Bike Analysis
+# NYC Citi Bike 2024: where bikes are needed, and when
 
-Exploratory analysis of NYC's Citi Bike system using January 2024 trip data
-(~1.9M rides) — cleaning, EDA, and a look at how members (subscribers) and
-casual riders use the system differently: when they ride, how long for, and
-where.
+An end-to-end analysis of **44,158,430 Citi Bike trips** (all of 2024), joined to
+NOAA weather and NYC's bike lane network, built around an operator's question:
+where do bikes pile up and run out, and can tomorrow's demand be predicted
+station by station?
 
-## Contents
+**[View the live site](https://ancientabacus.github.io/NYC-CitiBike-Analysis/)**
 
-- [`CitiBike_Analysis.ipynb`](CitiBike_Analysis.ipynb) — the notebook: loads
-  the month's trip data directly from Citi Bike's public S3 feed, cleans it,
-  and walks through trip duration, rider mix, ride timing, and busiest
-  stations.
-- [`docs/index.html`](docs/index.html) — a single scrolling page built on the
-  notebook's findings, telling the whole story in order: the data & method,
-  an interactive ride-volume **heatmap** by hour and day of week, a
-  geospatial **ridership map** of station density against NYC's bike lane
-  network (scrubbable by hour of day), a **predictive model** guessing
-  member vs. casual riders trip-by-trip, and a written **report** on what the
-  results actually show.
-  [**View it live**](https://ancientabacus.github.io/NYC-CitiBike-Analysis/).
+![Ride volume by hour and day of week, 2024](docs/assets/heatmap.png)
 
-## The heatmap
+## Key findings
 
-![Ride volume by hour and day of week](docs/assets/heatmap.png)
+- **The commute moves about 5,927 bikes the wrong way every weekday morning.**
+  676 stations lose 2+ bikes each morning and 409 gain 2+; Brooklyn
+  loses ~908 bikes a morning and Manhattan's office
+  districts absorb them. The evening rush mirrors it (station-level correlation -0.92).
+- **Weather sets the ceiling.** Holding temperature, weekday and system growth fixed, light rain
+  cuts a day's rides by 16% and heavy rain by 44%.
+  Dry-weekday ridership doubles from 5°C to 25°C, then plateaus.
+- **Demand is forecastable a day ahead.** A gradient-boosted model of hourly departures for
+  2,273 stations, trained on Jan–Oct and scored on unseen Nov–Dec, has
+  28% lower error than "same hour last week"
+  (MAE 0.97 vs. 1.35 rides per station-hour) and
+  28% lower than each station's typical level.
 
-Weekday ridership shows a sharp AM/PM commute pattern (8am and 5-6pm); weekend
-ridership spreads across a broader, later midday window instead — members
-commute, casual riders wander in on their own schedule.
+## What's in the repo
 
-## The ridership map
+| Path | What it does |
+|---|---|
+| [`docs/index.html`](docs/index.html) | The site: one scrolling page with the heatmap, seasons & weather, ridership maps, rebalancing map, forecast evaluation, and a written report. Plain HTML/SVG/JS charts ([`docs/assets/charts.js`](docs/assets/charts.js)), Leaflet maps. |
+| [`scripts/pipeline.py`](scripts/pipeline.py) | Single source of truth for loading, cleaning, caching (parquet per month), and NOAA weather. |
+| [`scripts/build_heatmap.py`](scripts/build_heatmap.py) | Hour × weekday ride volume. |
+| [`scripts/build_geomap.py`](scripts/build_geomap.py) | Station totals, point-in-polygon borough assignment, bike lanes. |
+| [`scripts/build_seasonality.py`](scripts/build_seasonality.py) | Daily rides vs. weather; log-linear model for rain/snow/holiday effects. |
+| [`scripts/build_rebalancing.py`](scripts/build_rebalancing.py) | Weekday rush-hour net flow per station; bikes to move. |
+| [`scripts/build_forecast.py`](scripts/build_forecast.py) | Station × hour demand forecast with a date-based split and three baselines. |
+| [`CitiBike_Analysis.ipynb`](CitiBike_Analysis.ipynb) | Exploratory deep-dive on January 2024, including a member-vs-casual classifier and the class-imbalance accuracy trap. |
 
-The map section plots the same January 2024 trips geospatially: a Leaflet
-heat layer of trip starts per station (toggleable, and scrubbable through the
-24 hours to watch the commute rush move across the city), overlaid on NYC
-DOT's actual bike lane network colored by borough, so you can see how
-ridership relates to where the infrastructure is — or isn't.
+## Method notes
 
-Manhattan's volume is so much higher than the rest of the city that on the
-citywide map, real outer-borough stations can read as empty space next to it.
-Below the main map, each of the 5 boroughs gets its own small map — its own
-zoom, and its own brightness scale normalized to that borough's own busiest
-station — so stations that get visually crushed above are clearly visible on
-their own terms. Every station is classified by real NYC borough boundary
-(point-in-polygon), not a rough lat/lng guess.
+- **Cleaning** (in `pipeline.py`): drop duplicate rides, out-of-month spillover, trips missing
+  station or coordinates, non-positive durations, and trips over 24h (Citi Bike's lost/stolen
+  threshold). Removes 0.33% of 44.3M raw rows. Every section reads the same cleaned trips.
+- **Forecast evaluation** is strictly by date: train Jan 8–Aug, early-stop on Sep–Oct, refit on
+  Jan–Oct, test Nov–Dec. Every feature is known a day ahead (calendar, weather, lags of 24h/168h,
+  same-hour 7-day mean, training-period station profile). A day-of-year feature was tried and
+  removed: with a date split, test dates are values the trees never saw, and validation error
+  rose as trees were added.
+- **Limitations:** the forecast uses observed weather (an upper bound on what forecast weather
+  would give); the trip data has no dock capacity, so "bikes to move" is a lower bound on
+  rebalancing work; one year of data.
 
-## Predicting the rider
+## Data sources
 
-A random forest classifier (with a logistic regression baseline) tries to
-guess, from a single trip's duration, distance, timing, bike type, and start
-station popularity, whether that trip belongs to a member or a casual rider.
-The headline number is deliberately not raw accuracy: with a ~9-to-1 class
-split, always guessing "member" already scores ~89% while identifying zero
-casual riders. Weighted to actually find the minority class, the forest
-trades accuracy for real recall on casual riders (ROC-AUC well above random
-guessing) — and its feature importances point back at the same duration gap
-the EDA already found, this time confirmed ride-by-ride rather than just on
-average.
+- Trips: [Citi Bike System Data](https://citibikenyc.com/system-data) (monthly zips on S3)
+- Weather: [NOAA NCEI](https://www.ncei.noaa.gov/), Central Park station (hourly LCD + GHCN-Daily)
+- Bike lanes and borough boundaries: [NYC Open Data](https://opendata.cityofnewyork.us/)
 
-## The report
+Nothing is committed; everything downloads into a gitignored `.cache/` on first run.
 
-The page closes with a written summary of what the analysis found: rider mix
-and trip duration (member vs. casual), the weekday commute pattern versus
-weekend spread, the geographic concentration of ridership in Manhattan
-despite bike lane infrastructure being built out fairly evenly citywide, and
-what the predictive model adds to that picture.
-
-## Data source
-
-[Citi Bike System Data](https://citibikenyc.com/system-data), published
-monthly as zipped CSVs at `https://s3.amazonaws.com/tripdata/index.html`. The
-notebook downloads the file at runtime — no data is committed to this repo.
-
-## Setup
+## Reproducing
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## One pipeline, one set of numbers
+Each script takes a period, `YYYY` (default `2024`) or `YYYYMM`. Run in this order (the first run
+downloads ~7.5 GB of trip data; the forecast takes ~15 minutes and ~6 GB RAM on 4 cores):
 
-`scripts/pipeline.py` is the single place the data is loaded, cleaned, and
-turned into model features. The notebook and all three build scripts import
-it, so every figure on the site and in the notebook comes from the same
-1,881,587 cleaned trips (6,498 of 1,888,085 raw rows removed: out-of-month
-spillover, missing station/coordinates, and trips over 24h). The month's zip
-is cached in `.cache/` (gitignored) so it's only downloaded once.
+```bash
+python scripts/build_heatmap.py
+```
 
-## Running the notebook
+```bash
+python scripts/build_geomap.py
+```
 
-Run top-to-bottom from the repo root (later cells depend on the cleaned
-DataFrame built earlier):
+```bash
+python scripts/build_seasonality.py
+```
+
+```bash
+python scripts/build_rebalancing.py
+```
+
+```bash
+python scripts/build_forecast.py
+```
+
+The notebook runs top to bottom from the repo root:
 
 ```bash
 jupyter nbconvert --to notebook --execute --inplace CitiBike_Analysis.ipynb
 ```
 
-## Regenerating the site data
-
-```bash
-python scripts/build_heatmap.py 202401   # docs/data/heatmap.{json,js}, docs/assets/heatmap.png
-```
-
-```bash
-python scripts/build_geomap.py 202401    # stations, borough summary, bike lanes
-```
-
-```bash
-python scripts/build_model.py 202401     # member-vs-casual model results
-```
-
-`YYYYMM` defaults to `202401`. `build_geomap.py` also pulls NYC borough
-boundaries (for point-in-polygon borough assignment) and DOT's current
-[bike route network](https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib)
-live from NYC Open Data, so re-running it can pick up new or retired bike lanes.
-
-The report section of `docs/index.html` is written prose, not generated from
-the data files. If you regenerate with a different month, update the figures
-cited there by hand.
+The report and hero text in `docs/index.html` are hand-written; if you regenerate with different
+data, update the figures cited there.
 
 ## Deployment
 
-`.github/workflows/` builds `docs/` and deploys it to GitHub Pages on every
-push to `main` (repo **Settings → Pages → Source: GitHub Actions**).
+`.github/workflows/` deploys `docs/` to GitHub Pages on every push to `main`.

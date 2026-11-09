@@ -399,14 +399,21 @@
 <div class="page">
 
   <header class="hero" id="top">
-    <p class="eyebrow">NYC Transportation Analysis</p>
-    <h1>Where — and when — New Yorkers ride</h1>
+    <p class="eyebrow">NYC Transportation Analysis &middot; 2024</p>
+    <h1>Where bikes are needed, and when: a year of Citi Bike</h1>
     <p class="tagline">
-      An end-to-end look at NYC's Citi Bike system: cleaning a month of raw trip data,
-      then reading the patterns out of it two ways — <strong>when</strong> the system gets
-      busy, and <strong>where</strong> — and writing up what it actually means. Built on
-      January 2024's public trip data (~1.9M rides) and NYC DOT's bike lane network.
+      44 million trips, joined to NOAA weather and NYC's bike lane network, to answer an
+      operator's question: where do bikes pile up and run out, and can tomorrow's demand
+      be predicted station by station?
     </p>
+    <ul class="key-findings">
+      <li><strong>The commute moves about 5,927 bikes the wrong way every weekday morning.</strong>
+        Residential stations empty out and Midtown fills up; the evening rush mirrors it almost exactly (correlation -0.92).</li>
+      <li><strong>Weather sets the ceiling.</strong> A heavy-rain day costs 44% of rides and light rain 16%,
+        compared with a dry day of the same temperature and weekday.</li>
+      <li><strong>Demand is forecastable a day ahead.</strong> A gradient-boosted model cuts hourly station-level error by
+        28% versus "same hour last week" (25% versus "same hour yesterday") on two months it never saw.</li>
+    </ul>
     <div class="stat-row" id="overview-stat-row"></div>
   </header>
 
@@ -620,93 +627,95 @@
   </section>
 
   <section class="section-block prose" id="report">
-    <p class="section-kicker">05 &middot; The report</p>
-    <h2>What the data actually shows</h2>
+    <p class="section-kicker">06 &middot; The report</p>
+    <h2>What the data shows</h2>
 
     <div class="report-block">
-      <h3>Who's riding</h3>
+      <h3>Who rides, and when</h3>
       <p>
-        Members (people with a subscription) made up <strong>89%</strong> of all
-        January 2024 trips, and casual riders (single-ride or day-pass) accounted for
-        the other <strong>11%</strong>. Electric bikes outnumbered classic bikes
-        system-wide, <strong>64% to 36%</strong>. Trip length is the more interesting
-        number: the average member trip lasted <strong>10.2 minutes</strong>, while the
-        average casual trip ran <strong>15.5 minutes</strong>, about 52% longer. That
-        tracks with what you'd expect: members using the system for direct,
-        point-to-point commuting, and casual riders treating the ride itself as the
-        point rather than just a way to get somewhere.
+        Members made up <strong>81%</strong> of 2024's 44,158,430 trips and casual riders
+        <strong>19%</strong>, rising to 26% on weekends. Electric bikes carried <strong>66%</strong> of
+        trips. Casual trips run longer (median <strong>13 minutes</strong> vs. <strong>8</strong> for
+        members), the signature of leisure rides rather than commutes. On weekdays, ridership forms a
+        sharp double peak at 8am and 5pm; the busiest hour of the week is
+        <strong>Tuesday at 5pm</strong>, with 698,495 trips
+        starting in that hour across the year. Weekends spread into one broad midday hump.
       </p>
     </div>
 
     <div class="report-block">
-      <h3>When they ride</h3>
+      <h3>Seasons and weather</h3>
       <p>
-        The heatmap above makes the weekday commute pattern hard to miss: a sharp
-        double-peak at <strong>8am</strong> and <strong>5–6pm</strong>, Monday through
-        Friday. Weekends look nothing like that. Ridership spreads into one broad
-        window centered on midday instead of two rush-hour spikes, which fits leisure
-        riding better than commuting. The single busiest hour of the entire month was
-        <strong>Wednesday at 5pm</strong>, with <strong>33,505</strong> trips starting
-        in that hour alone.
+        The seasonal swing dwarfs the weekly one. The busiest day,
+        <strong>2024-09-20</strong>, saw 193,685 rides; Christmas Day saw
+        21,488. On dry weekdays, ridership roughly doubles between a 5&deg;C day and a
+        25&deg;C day, then levels off and dips slightly above 30&deg;C. Holding temperature, weekday and the
+        system's growth fixed, light rain cuts a day's rides by about <strong>16%</strong>,
+        heavy rain by <strong>44%</strong>, and a federal holiday by
+        <strong>23%</strong>. Underneath the weather, the system grew: about
+        <strong>32%</strong> more riding from January to December at equal conditions,
+        which is why October outdid July.
       </p>
     </div>
 
     <div class="report-block">
       <h3>Where they ride</h3>
       <p>
-        The system spans <strong>2,128 stations</strong>, and NYC DOT's bike lane
-        network, <strong>23,807</strong> mapped segments, is built out across all five
-        boroughs. Actual ridership isn't nearly as even. Classifying every station
-        against real NYC borough boundaries (not a rough lat/lng guess) shows Manhattan
-        holding <strong>31%</strong> of stations but <strong>66%</strong> of all
-        citywide rides. Brooklyn actually has slightly <em>more</em> stations than
-        Manhattan (690 vs. 666) but only <strong>24%</strong> of rides. Queens
-        (<strong>21%</strong> of stations) and the Bronx (<strong>15%</strong>) trail
-        further behind, at <strong>7%</strong> and <strong>3%</strong> of rides
-        respectively. Staten Island has real DOT bike lanes but, as of January 2024,
-        <strong>zero</strong> Citi Bike stations. The borough-by-borough maps below
-        make this concrete: every borough's stations are real, they're just measured on
-        Manhattan's scale on the map above, which makes the quieter ones look emptier
-        than they actually are.
+        Across 2,273 stations, Manhattan holds <strong>31%</strong> of
+        stations but <strong>64%</strong> of rides. Brooklyn has slightly more
+        stations (716 vs. 706) and 26% of rides; Queens
+        (20% of stations) and the Bronx (15%) trail at
+        7% and 3%. Staten Island has DOT bike lanes
+        but no Citi Bike stations. The bike lane network reaches every borough; ridership does not follow it evenly.
       </p>
     </div>
 
     <div class="report-block">
-      <h3>Can the data guess who's riding?</h3>
+      <h3>The rebalancing problem</h3>
       <p>
-        The sections above are all group-level averages. A random forest classifier
-        was trained to answer a sharper question: from a single trip's duration,
-        distance, timing, bike type, and station popularity alone, can you tell
-        whether <em>that one ride</em> belongs to a member or a casual rider? A naive
-        model that always guesses "member" already scores <strong>89.0%</strong>
-        accuracy while identifying zero casual riders — with a 9-to-1 class split,
-        accuracy alone is a trap. Weighted to actually find the minority class, the
-        forest's raw accuracy drops to <strong>67.9%</strong>, but that's the trade
-        working as intended: it correctly identifies <strong>63%</strong> of casual
-        riders (ROC-AUC <strong>0.723</strong>, clearly above random guessing),
-        against 0% for the naive baseline. Feature importance shows trip
-        <strong>speed</strong> and <strong>duration</strong> together account for
-        about 43% of the predictive signal — confirming, ride by ride and not just on
-        average, that the "casual trips run ~52% longer" finding above is real signal.
-        Bike type, distance, and station popularity matter next; hour of day and weekend
-        barely register on their own, even though the heatmap shows a very real
-        group-level pattern.
+        Commuting creates a daily, predictable imbalance. On an average weekday morning
+        <strong>676</strong> stations lose two or more bikes and
+        <strong>409</strong> gain two or more; undoing it takes at least
+        <strong>5,927 bikes</strong> moved back every weekday morning, peaking at
+        8,517 in October and falling to
+        4,026 in January. Brooklyn as a whole loses about
+        908 bikes each morning while Manhattan gains about
+        637, but the extremes are inside Manhattan: residential
+        blocks like W 43 St &amp; 10 Ave lose around 50 bikes a morning while office stations like
+        E 47 St &amp; Park Ave gain nearly 100. The evening rush reverses it almost exactly (correlation
+        -0.92), so much of the work is a predictable daily cycle.
+      </p>
+    </div>
+
+    <div class="report-block">
+      <h3>Forecasting demand</h3>
+      <p>
+        Because the cycle is predictable, it can be planned. A gradient-boosted model forecasting
+        hourly departures for 2,273 stations, using only what's known the day before, was
+        scored on November&ndash;December after training on earlier months. Its error averages
+        <strong>0.97 rides per station-hour</strong>, <strong>28% lower</strong>
+        than repeating the same hour last week and 28% lower than each
+        station's typical level. At the daily grain a crew plans on, error falls
+        39% versus last week. The model leans most on each station's recent history (the same hour over
+        the past week), its usual level, and temperature. Two caveats: it uses observed rather than forecast weather, so it
+        slightly overstates what a live system would get, and the test months fall in late autumn and early winter, quieter than most of the training period.
       </p>
     </div>
 
     <div class="report-block">
       <h3>What it adds up to</h3>
       <p>
-        Put the timing and the geography together and they point at the same thing from
-        two directions: Citi Bike in January 2024 was functioning largely as a
-        <strong>commuter-first, Manhattan-centered</strong> system. Usage peaks exactly
-        when commutes do, and concentrates exactly where the densest existing transit
-        already is. That reads less like bike share replacing longer cross-borough
-        trips and more like it's filling short last-mile gaps in a system that's
-        already transit-rich. The outer boroughs are real, served, and comparatively
-        quiet. The predictive model above adds a fourth angle that agrees with the
-        first three: how a trip is ridden — fast and short versus slow and long — is a
-        stronger tell of who's on the bike than exactly when or where they got on it.
+        Citi Bike in 2024 was a commuter-first, Manhattan-centered system whose load swings with the
+        seasons and the rain. The same commute that drives ridership also drives its biggest operating
+        cost, but that cost is regular: a few hundred stations, the same direction every morning, reversed
+        every evening. A day-ahead forecast plus the station-level imbalance map is enough to tell crews
+        where to stage bikes before the rush, rather than reacting after stations run dry.
+      </p>
+      <p>
+        <em>Limitations.</em> The trip data has no dock capacity or real-time station status, so "bikes to
+        move" is a lower bound on rebalancing work, not a measure of empty-station minutes. Station names
+        are used as identifiers and a handful change during the year. Everything here is one year;
+        pandemic-era and post-expansion years may differ.
       </p>
     </div>
   </section>
