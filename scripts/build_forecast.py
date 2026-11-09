@@ -210,9 +210,15 @@ def run_target(year, kind, train_end, valid_end, extras):
     return out, test[["station", "hour_start", "y", "pred", "same_hour_7d_mean"]]
 
 
-def conformal_band(pred_cal, y_cal, pred_new, n_bins=30, q=(0.1, 0.9)):
-    """Empirical 10th/90th percentile of actuals, per bin of predicted level."""
-    edges = np.unique(np.quantile(pred_cal, np.linspace(0, 1, n_bins + 1)))
+def conformal_band(pred_cal, y_cal, pred_new, q=(0.1, 0.9)):
+    """Empirical 10th/90th percentile of actuals, per bin of predicted level.
+
+    Bins are quantiles of the calibration predictions, with extra resolution
+    in the top 10% (the busy hours, where the spread changes fastest); with
+    evenly spaced quantiles the top bin spanned ~15 to 60 trips and the band
+    went flat across every rush hour."""
+    levels = np.unique(np.concatenate([np.linspace(0, 0.9, 28), np.linspace(0.9, 0.99, 19), [0.995, 1.0]]))
+    edges = np.unique(np.quantile(pred_cal, levels))
     cal_bin = np.clip(np.searchsorted(edges, pred_cal, side="right") - 1, 0, len(edges) - 2)
     lo_by_bin = np.array([np.quantile(y_cal[cal_bin == b], q[0]) if (cal_bin == b).any() else 0 for b in range(len(edges) - 1)])
     hi_by_bin = np.array([np.quantile(y_cal[cal_bin == b], q[1]) if (cal_bin == b).any() else 0 for b in range(len(edges) - 1)])
