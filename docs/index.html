@@ -644,7 +644,7 @@
   </section>
 
   <footer class="site-footer section-block">
-    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January 2024. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data.</p>
+    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January 2024. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data. Basemaps: Esri, HERE, Garmin, &copy; OpenStreetMap contributors.</p>
     <p>See the full analysis in <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">the repository</a>.</p>
   </footer>
 
@@ -840,6 +840,19 @@
       return;
     }
 
+    // Esri's gray canvas basemaps: muted light/dark styles that need no API
+    // key (CARTO's basemaps started serving "API KEY REQUIRED" watermarks).
+    // Native tiles stop at z16; Leaflet upscales beyond that.
+    function basemapTiles(style, withAttribution) {
+      return L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${style}/MapServer/tile/{z}/{y}/{x}`, {
+        attribution: withAttribution
+          ? 'Basemap &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          : "",
+        maxNativeZoom: 16,
+        maxZoom: 19,
+      });
+    }
+
     const map = L.map("map", { scrollWheelZoom: true, zoomControl: true, preferCanvas: true });
 
     // Fit to the real extent of the station data (spans all 5 boroughs plus a
@@ -854,16 +867,8 @@
     map.fitBounds(stationBounds, { padding: [56, 56] });
     const baseZoom = map.getZoom();
 
-    const lightTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    });
-    const darkTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    });
+    const lightTiles = basemapTiles("World_Light_Gray_Base", true);
+    const darkTiles = basemapTiles("World_Dark_Gray_Base", true);
 
     let currentTiles = null;
     function applyTiles() {
@@ -1082,8 +1087,8 @@
         attributionControl: false,
       });
 
-      const miniLightTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 });
-      const miniDarkTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { subdomains: "abcd", maxZoom: 19 });
+      const miniLightTiles = basemapTiles("World_Light_Gray_Base", false);
+      const miniDarkTiles = basemapTiles("World_Dark_Gray_Base", false);
       let miniCurrentTiles = isDark() ? miniDarkTiles : miniLightTiles;
       miniCurrentTiles.addTo(miniMap);
 
