@@ -374,6 +374,11 @@
   .data-table td strong { color: var(--text-primary); }
   .data-table tr.highlight td { color: var(--text-primary); font-weight: 600; }
   .metrics-table { max-width: 640px; margin-bottom: 8px; }
+  @media (max-width: 640px) {
+    /* wide metric tables scroll inside the card instead of widening the page */
+    .metrics-table { display: block; overflow-x: auto; }
+    .metrics-table th, .metrics-table td { white-space: nowrap; }
+  }
 
   /* ---- forecast importance bars ---- */
   .imp-row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; margin-bottom: 9px; }
@@ -404,19 +409,19 @@
     <p class="eyebrow">NYC Transportation Analysis &middot; 2024</p>
     <h1>Where bikes are needed, and when: a year of Citi Bike</h1>
     <p class="tagline">
-      <span data-fact="total_rides">?</span> trips, joined to NOAA weather and NYC's bike lane network, to answer an
+      <span data-fact="total_rides">44,158,430</span> trips, joined to NOAA weather and NYC's bike lane network, to answer an
       operator's question: where do bikes pile up and run out, and can tomorrow's demand
       be predicted station by station?
     </p>
     <ul class="key-findings">
-      <li><strong>The commute leaves about <span data-fact="bikes_to_move">?</span> bikes in the wrong place every weekday morning.</strong>
+      <li><strong>The commute leaves about <span data-fact="bikes_to_move">5,927</span> bikes in the wrong place every weekday morning.</strong>
         Residential stations empty out and office districts fill up, and the evening rush reverses it
-        (correlation <span data-fact="am_pm_corr_normalized">?</span> even after adjusting for station size).</li>
+        (correlation <span data-fact="am_pm_corr_normalized">-0.80</span> even after adjusting for station size).</li>
       <li><strong>Rain hurts most when it falls at rush hour.</strong> Rain during commute hours cuts a day's rides by
-        <span data-fact="commute_rain_effect">?</span> (95% CI <span data-fact="commute_rain_ci">?</span>); rain only at other times, by <span data-fact="offpeak_rain_effect">?</span>.</li>
+        <span data-fact="commute_rain_effect">29%</span> (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>); rain only at other times, by <span data-fact="offpeak_rain_effect">7%</span>.</li>
       <li><strong>Demand is forecastable a day ahead.</strong> On two months it never saw, the model's hourly error is
-        <span data-fact="forecast_vs_7d">?</span> lower than the best simple rule (each station's average for that hour over the past week),
-        and it beat that rule in <span data-fact="backtest_wins">?</span> of <span data-fact="backtest_folds">?</span> monthly backtests.</li>
+        <span data-fact="forecast_vs_7d">17%</span> lower than the best simple rule (each station's average for that hour over the past week),
+        and it beat that rule in <span data-fact="backtest_wins">5</span> of <span data-fact="backtest_folds">5</span> monthly backtests.</li>
     </ul>
     <div class="stat-row" id="overview-stat-row"></div>
   </header>
@@ -432,8 +437,8 @@
       drop duplicate rides, drop trips that spill outside their month at the file's edges,
       drop trips missing a start or end station or coordinates, drop trips with non-positive
       duration, and drop trips over 24 hours (Citi Bike's own definition of a lost or stolen
-      bike). That removes <span data-fact="removed_rows">?</span> of <span data-fact="raw_rows">?</span> raw rows (<span data-fact="removed_share">?</span>), leaving
-      <strong><span data-fact="total_rides">?</span></strong> trips.
+      bike). That removes <span data-fact="removed_rows">144,779</span> of <span data-fact="raw_rows">44,303,209</span> raw rows (<span data-fact="removed_share">0.33%</span>), leaving
+      <strong><span data-fact="total_rides">44,158,430</span></strong> trips.
     </p>
     <p>
       Two outside datasets fill in context: hourly and daily weather from
@@ -645,12 +650,12 @@
     <div class="report-block">
       <h3>Who rides, and when</h3>
       <p>
-        Members made up <strong><span data-fact="member_share">?</span></strong> of 2024's <span data-fact="total_rides">?</span> trips and casual riders
-        <strong><span data-fact="casual_share">?</span></strong>, rising to <span data-fact="casual_share_weekend">?</span> on weekends. Electric bikes carried
-        <strong><span data-fact="electric_share">?</span></strong> of trips. Casual trips run longer (median <strong><span data-fact="median_minutes_casual">?</span> minutes</strong>
-        vs. <strong><span data-fact="median_minutes_member">?</span></strong> for members), the signature of leisure rides rather than commutes. On
+        Members made up <strong><span data-fact="member_share">81%</span></strong> of 2024's <span data-fact="total_rides">44,158,430</span> trips and casual riders
+        <strong><span data-fact="casual_share">19%</span></strong>, rising to <span data-fact="casual_share_weekend">26%</span> on weekends. Electric bikes carried
+        <strong><span data-fact="electric_share">66%</span></strong> of trips. Casual trips run longer (median <strong><span data-fact="median_minutes_casual">13</span> minutes</strong>
+        vs. <strong><span data-fact="median_minutes_member">8</span></strong> for members), the signature of leisure rides rather than commutes. On
         weekdays, ridership forms a sharp double peak at 8am and 5pm; the busiest hour of the week is
-        <strong><span data-fact="busiest_slot">?</span></strong>, with <span data-fact="busiest_slot_rides">?</span> trips starting in that hour across the year.
+        <strong><span data-fact="busiest_slot">Tuesday at 5pm</span></strong>, with <span data-fact="busiest_slot_rides">698,495</span> trips starting in that hour across the year.
         Weekends spread into one broad midday hump.
       </p>
     </div>
@@ -658,16 +663,16 @@
     <div class="report-block">
       <h3>Seasons and weather</h3>
       <p>
-        The seasonal swing dwarfs the weekly one. The busiest day, <strong><span data-fact="busiest_day">?</span></strong>, saw
-        <span data-fact="busiest_day_rides">?</span> rides; Christmas Day saw <span data-fact="quietest_day_rides">?</span>. On dry weekdays, ridership roughly
+        The seasonal swing dwarfs the weekly one. The busiest day, <strong><span data-fact="busiest_day">2024-09-20</span></strong>, saw
+        <span data-fact="busiest_day_rides">193,685</span> rides; Christmas Day saw <span data-fact="quietest_day_rides">21,488</span>. On dry weekdays, ridership roughly
         doubles between a 5&deg;C day and a 25&deg;C day, then levels off and dips slightly above 30&deg;C.
         Hourly NOAA observations show that <em>when</em> it rains matters more than whether it rains: holding
         temperature, weekday and growth fixed, rain during commute hours cuts a day's rides by
-        <strong><span data-fact="commute_rain_effect">?</span></strong> (95% CI <span data-fact="commute_rain_ci">?</span>), rain only outside commute hours by just
-        <strong><span data-fact="offpeak_rain_effect">?</span></strong> (<span data-fact="offpeak_rain_ci">?</span>), and a heavy-rain day by
-        <strong><span data-fact="heavy_rain_effect">?</span></strong> (<span data-fact="heavy_rain_ci">?</span>). Federal holidays cost <span data-fact="holiday_effect">?</span>
-        (<span data-fact="holiday_ci">?</span>). Snow days are too few for a reliable estimate. The system also grew over the year, but
-        the model can only pin that growth to a wide range (<span data-fact="growth_ci">?</span>), so it's treated as a control,
+        <strong><span data-fact="commute_rain_effect">29%</span></strong> (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>), rain only outside commute hours by just
+        <strong><span data-fact="offpeak_rain_effect">7%</span></strong> (<span data-fact="offpeak_rain_ci">2&ndash;10%</span>), and a heavy-rain day by
+        <strong><span data-fact="heavy_rain_effect">43%</span></strong> (<span data-fact="heavy_rain_ci">34&ndash;51%</span>). Federal holidays cost <span data-fact="holiday_effect">24%</span>
+        (<span data-fact="holiday_ci">2&ndash;37%</span>). Snow days are too few for a reliable estimate. The system also grew over the year, but
+        the model can only pin that growth to a wide range (<span data-fact="growth_ci">21&ndash;69%</span>), so it's treated as a control,
         not a finding.
       </p>
     </div>
@@ -675,11 +680,11 @@
     <div class="report-block">
       <h3>Where they ride</h3>
       <p>
-        Across <span data-fact="station_count">?</span> stations, Manhattan holds <strong><span data-fact="manhattan_station_share">?</span></strong> of stations
-        but <strong><span data-fact="manhattan_ride_share">?</span></strong> of rides. Brooklyn has slightly more stations
-        (<span data-fact="brooklyn_stations">?</span> vs. <span data-fact="manhattan_stations">?</span>) and <span data-fact="brooklyn_ride_share">?</span> of rides; Queens
-        (<span data-fact="queens_station_share">?</span> of stations) and the Bronx (<span data-fact="bronx_station_share">?</span>) trail at
-        <span data-fact="queens_ride_share">?</span> and <span data-fact="bronx_ride_share">?</span>. Staten Island has DOT bike lanes but no Citi Bike
+        Across <span data-fact="station_count">2,273</span> stations, Manhattan holds <strong><span data-fact="manhattan_station_share">31%</span></strong> of stations
+        but <strong><span data-fact="manhattan_ride_share">64%</span></strong> of rides. Brooklyn has slightly more stations
+        (<span data-fact="brooklyn_stations">716</span> vs. <span data-fact="manhattan_stations">706</span>) and <span data-fact="brooklyn_ride_share">26%</span> of rides; Queens
+        (<span data-fact="queens_station_share">20%</span> of stations) and the Bronx (<span data-fact="bronx_station_share">15%</span>) trail at
+        <span data-fact="queens_ride_share">7%</span> and <span data-fact="bronx_ride_share">3%</span>. Staten Island has DOT bike lanes but no Citi Bike
         stations. The bike lane network reaches every borough; ridership does not follow it evenly.
       </p>
     </div>
@@ -688,14 +693,14 @@
       <h3>The rebalancing problem</h3>
       <p>
         Commuting creates a daily, predictable imbalance. On an average weekday morning
-        <strong><span data-fact="drainer_count">?</span></strong> stations lose two or more bikes and <strong><span data-fact="filler_count">?</span></strong> gain
-        two or more; undoing it takes at least <strong><span data-fact="bikes_to_move">?</span> bikes</strong> moved back every weekday morning,
-        peaking at <span data-fact="peak_move_bikes">?</span> in <span data-fact="peak_move_month">?</span> and falling to <span data-fact="low_move_bikes">?</span> in
-        <span data-fact="low_move_month">?</span>. Brooklyn as a whole loses about <span data-fact="brooklyn_am_loss">?</span> bikes each morning while Manhattan
-        gains about <span data-fact="manhattan_am_gain">?</span>, but the extremes are inside Manhattan: residential blocks like
+        <strong><span data-fact="drainer_count">676</span></strong> stations lose two or more bikes and <strong><span data-fact="filler_count">409</span></strong> gain
+        two or more; undoing it takes at least <strong><span data-fact="bikes_to_move">5,927</span> bikes</strong> moved back every weekday morning,
+        peaking at <span data-fact="peak_move_bikes">8,517</span> in <span data-fact="peak_move_month">October</span> and falling to <span data-fact="low_move_bikes">4,026</span> in
+        <span data-fact="low_move_month">January</span>. Brooklyn as a whole loses about <span data-fact="brooklyn_am_loss">908</span> bikes each morning while Manhattan
+        gains about <span data-fact="manhattan_am_gain">637</span>, but the extremes are inside Manhattan: residential blocks like
         W 43 St &amp; 10 Ave lose around 50 bikes a morning while office stations like E 47 St &amp; Park Ave gain
-        nearly 100. The evening rush reverses the morning (station-level correlation <span data-fact="am_pm_corr">?</span>, and still
-        <span data-fact="am_pm_corr_normalized">?</span> when each station's net flow is divided by its traffic, so it isn't just busy
+        nearly 100. The evening rush reverses the morning (station-level correlation <span data-fact="am_pm_corr">-0.92</span>, and still
+        <span data-fact="am_pm_corr_normalized">-0.80</span> when each station's net flow is divided by its traffic, so it isn't just busy
         stations being busy both ways).
       </p>
     </div>
@@ -704,25 +709,26 @@
       <h3>Forecasting demand</h3>
       <p>
         Because the cycle is predictable, it can be planned. Two gradient-boosted models forecast hourly departures
-        and arrivals for <span data-fact="forecast_stations">?</span> stations from what's known the day before, scored on
+        and arrivals for <span data-fact="forecast_stations">2,273</span> stations from what's known the day before, scored on
         November&ndash;December after training on earlier months. The fair comparison is the best simple rule a
         planner could use, each station's average for that hour over the past week, which is also the model's top
-        input. Against it, the model's departures error is <strong><span data-fact="forecast_vs_7d">?</span> lower</strong>
-        (<span data-fact="forecast_mae">?</span> vs. <span data-fact="forecast_7d_mae">?</span> trips per station-hour), <span data-fact="forecast_vs_7d_daily">?</span> lower at the
-        daily level, and arrivals improve by <span data-fact="arrivals_vs_7d">?</span>. Against weaker rules the gap is larger
-        (<span data-fact="forecast_vs_yesterday">?</span> vs. "same hour yesterday", <span data-fact="forecast_vs_naive">?</span> vs. "same hour last week").
-        The gain holds in a rolling backtest: the model beat the 7-day rule in <span data-fact="backtest_wins">?</span> of
-        <span data-fact="backtest_folds">?</span> months, by <span data-fact="backtest_min_gain">?</span> to <span data-fact="backtest_max_gain">?</span>.
+        input. Against it, the model's departures error is <strong><span data-fact="forecast_vs_7d">17%</span> lower</strong>
+        (<span data-fact="forecast_mae">0.97</span> vs. <span data-fact="forecast_7d_mae">1.16</span> trips per station-hour), <span data-fact="forecast_vs_7d_daily">25%</span> lower at the
+        daily level, and arrivals improve by <span data-fact="arrivals_vs_7d">16%</span>. Against weaker rules the gap is larger
+        (<span data-fact="forecast_vs_yesterday">25%</span> vs. "same hour yesterday", <span data-fact="forecast_vs_naive">28%</span> vs. "same hour last week").
+        The gain holds in a rolling backtest: the model beat the 7-day rule in <span data-fact="backtest_wins">5</span> of
+        <span data-fact="backtest_folds">5</span> months, by <span data-fact="backtest_min_gain">13%</span> to <span data-fact="backtest_max_gain">18%</span>.
       </p>
       <p>
         For a dispatcher, the question is net flow: which stations lose the most bikes before 10am. Combining the two
-        models, the error in each station's morning net flow drops from <span data-fact="net_mae_7d">?</span> to <span data-fact="net_mae_model">?</span>
-        bikes (<span data-fact="net_mae_gain">?</span> lower), but at picking the <span data-fact="net_top_k">?</span> biggest losers each morning the model
-        (<span data-fact="net_precision_model">?</span> of <span data-fact="net_top_k">?</span>) is no better than the 7-day rule
-        (<span data-fact="net_precision_7d">?</span>): the worst stations are the same ones every day, and history alone finds them.
-        The model earns its keep on the long tail of mid-sized stations and on unusual days (weather, holidays), not
-        on the obvious hot spots. An 80% prediction band, calibrated on held-out months, contained
-        <span data-fact="interval_coverage">?</span> of test hours (<span data-fact="interval_coverage_busy">?</span> of busy hours).
+        models, the error in each station's morning net flow drops from <span data-fact="net_mae_7d">3.1</span> to
+        <span data-fact="net_mae_model">2.7</span> bikes (<span data-fact="net_mae_gain">12%</span> lower). Picking each morning's
+        <span data-fact="net_top_k">20</span> biggest losers is harder: the model finds <span data-fact="net_precision_model">11.3</span>
+        of them on average and the 7-day rule <span data-fact="net_precision_7d">10.9</span>. The worst stations shift more from day
+        to day than the averages suggest, and the model's edge on that narrow task is small; its gains are spread across
+        the whole network and on unusual days (weather, holidays). An 80% prediction band, calibrated on held-out months,
+        contained <span data-fact="interval_coverage">93%</span> of test hours; that's wider than needed in quiet hours, where counts
+        near zero are lumpy, and close to target (<span data-fact="interval_coverage_busy">83%</span>) in busy ones.
       </p>
     </div>
 
@@ -731,9 +737,9 @@
       <p>
         Citi Bike in 2024 was a commuter-first, Manhattan-centered system whose load swings with the seasons and
         with rush-hour rain. The same commute that drives ridership also drives its biggest operating cost, but that
-        cost is regular: a few hundred stations, the same direction every morning, reversed every evening. The
-        biggest losers are predictable from last week alone; a day-ahead forecast adds value by sizing the rest of
-        the network and adjusting for weather and holidays before the rush.
+        cost is regular: a few hundred stations, the same direction every morning, reversed every evening. A
+        day-ahead forecast narrows the uncertainty about how big each morning's imbalance will be and adjusts for
+        weather and holidays before the rush; which exact stations end up worst on a given day stays noisy.
       </p>
       <p>
         <em>Limitations.</em> The trip data has no dock capacity or real-time station status, so "bikes to move" is a
