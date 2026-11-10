@@ -29,6 +29,11 @@ Evaluation, all by date:
              a perfect forecast of the *expected* count would get if trips
              were Poisson around it (real demand is noisier, so the true
              ceiling is lower)
+  weather    the departures model is retrained with every weather input
+             replaced by the previous day's value at the same hour: a crude
+             "forecast" anyone has a day ahead. Real forecasts beat that, so
+             true day-ahead accuracy lies between this and the observed-
+             weather result
   decision   weekday 7-10am net flow per station, and precision@20 for each
              morning's biggest losers
   intervals  shortest interval covering 80% of validation outcomes, per bin
@@ -95,6 +100,7 @@ MAX_TREES, TREE_STEP, MIN_GAIN = 2000, 50, 0.0005
 AM = (7, 10)
 TOP_K = 20
 BACKTEST_SAMPLE, BACKTEST_TREES = 5_000_000, 200
+WEATHER = ["temp_c", "precip_mm", "wind_ms", "precip_3h", "precip_day"]
 SMOKE = os.environ.get("FORECAST_SMOKE_STATIONS")
 
 
@@ -178,8 +184,9 @@ def add_features(grid: pd.DataFrame, year: str, train_end: str) -> pd.DataFrame:
     weather = load_weather_hourly(year).set_index("hour_start")
     weather["precip_3h"] = weather["precip_mm"].rolling(3, min_periods=1).sum()
     weather["precip_day"] = weather.groupby(weather.index.normalize())["precip_mm"].transform("sum")
-    for col in ("temp_c", "precip_mm", "wind_ms", "precip_3h", "precip_day"):
+    for col in WEATHER:
         grid[col] = ts.map(weather[col]).astype(np.float32)
+        grid[col + "_prev"] = (ts - pd.Timedelta(hours=24)).map(weather[col]).astype(np.float32)
     grid["station_profile"] = station_profile(grid, train_end)
     return grid
 
@@ -342,6 +349,18 @@ def run_target(year, kind, train_end, valid_end, shared):
            "stations": int(grid["station"].nunique()), "test_mean": round(float(yt.mean()), 4),
            "hourly": hourly, "levels": level_accuracy(test)}
 
+    if kind == "departures":  # same model, but it only knows yesterday's weather
+        Xp = grid[[f + "_prev" if f in WEATHER else f for f in FEATURES]].to_numpy(dtype=np.float32)
+        prev_model = HistGradientBoostingRegressor(**params, max_iter=best_iter).fit(Xp[tr | va], y[tr | va])
+        prev = test.assign(pred=prev_model.predict(Xp[te]))
+        mae = float(np.abs(prev["pred"].to_numpy() - yt).mean())
+        shared["yesterdays_weather"] = {
+            "hourly_mae": round(mae, 4),
+            "vs_seven_day_mean_hourly": round(1 - mae / hourly["seven_day_mean"]["mae"], 4),
+            "levels": {lv["level"]: lv["model"] for lv in level_accuracy(prev)},
+        }
+        print("  yesterday's weather:", shared["yesterdays_weather"], flush=True)
+        del Xp, prev_model
     if not SMOKE:  # keep the test forecasts for follow-up analysis
         test.to_parquet(REPO / ".cache" / f"forecast_test_{kind}_{year}.parquet", index=False)
     if kind == "departures":
@@ -478,7 +497,7 @@ def main() -> None:
     (data_dir / "forecast.json").write_text(payload)
     (data_dir / "forecast.js").write_text("window.FORECAST_DATA = " + payload + ";\n")
     print(f"Wrote {data_dir.relative_to(REPO)}/forecast.{{json,js}}", flush=True)
-    show = {k: out[k] for k in ("tuning", "chosen", "improvement", "net_flow_am", "intervals", "backtest")}
+    show = {k: out[k] for k in ("tuning", "chosen", "improvement", "yesterdays_weather", "net_flow_am", "intervals", "backtest")}
     show |= {"levels": dep["levels"], "dep": dep["hourly"], "arr": arr["hourly"], "trees": [dep["trees"], arr["trees"]]}
     print(json.dumps(show, indent=1))
 
