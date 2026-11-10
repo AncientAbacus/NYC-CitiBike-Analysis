@@ -145,5 +145,5 @@ footer.site-footer p { margin: 0 0 6px; }
 
 @media (max-width: 640px) {
   .site-nav .nav-inner { justify-content: flex-start; }
-  .site-nav .links { gap: 14px; }
+  .site-nav .links { gap: 6px 14px; flex-wrap: wrap; }
 }

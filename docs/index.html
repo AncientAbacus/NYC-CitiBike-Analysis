@@ -102,11 +102,6 @@
     font-size: 13px;
   }
   .prose strong { color: var(--text-primary); }
-  .report-block + .report-block { margin-top: 28px; }
-  .report-block h3 {
-    font-size: 15px;
-    margin: 0 0 8px;
-  }
 
   /* ---- heatmap chart ---- */
   .chart-wrap { overflow-x: auto; }
@@ -286,37 +281,6 @@
     .toggle-group { flex-wrap: wrap; }
   }
 
-  /* ---- per-borough small multiples ---- */
-  .boro-lede { margin-top: 32px; margin-bottom: 20px; }
-  .boro-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
-  }
-  .boro-card {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-  }
-  .boro-card h3 { font-size: 14px; margin: 0 0 4px; }
-  .boro-card .boro-stats {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin: 0 0 10px;
-  }
-  .boro-card .boro-map {
-    height: 260px;
-    width: 100%;
-    border-radius: 8px;
-    background: var(--control-bg);
-  }
-  .boro-card .boro-note {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 8px;
-  }
-
   /* ---- hero key findings ---- */
   .key-findings { list-style: none; padding: 0; margin: 20px 0 28px; display: grid; gap: 12px; max-width: 78ch; }
   .key-findings li {
@@ -380,25 +344,21 @@
     .metrics-table th, .metrics-table td { white-space: nowrap; }
   }
 
-  /* ---- forecast importance bars ---- */
-  .imp-row { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 10px; margin-bottom: 9px; }
-  .imp-label { font-size: 12.5px; color: var(--text-secondary); }
-  .imp-bar-track { height: 10px; border-radius: 5px; background: var(--gridline); overflow: hidden; }
-  .imp-bar { height: 100%; border-radius: 0 5px 5px 0; background: var(--accent); }
-  .imp-value { font-size: 12px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .card-gap, .table-gap { margin-top: 20px; }
+  .method-list { padding-left: 18px; display: grid; gap: 10px; max-width: 80ch; }
+  .data-table + .chart-note { margin-top: 8px; }
 </style>
 </head>
 <body>
 <nav class="site-nav">
   <div class="nav-inner">
-    <a class="wordmark" href="#top">NYC Citi Bike Analysis</a>
+    <a class="wordmark" href="#top">NYC Citi Bike 2024</a>
     <div class="links">
-      <a href="#data">Data</a>
-      <a href="#when">When</a>
+      <a href="#demand">Demand</a>
       <a href="#where">Where</a>
       <a href="#rebalance">Rebalancing</a>
       <a href="#forecast">Forecast</a>
-      <a href="#report">Report</a>
+      <a href="#method">Method</a>
       <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">GitHub &#8599;</a>
     </div>
   </div>
@@ -406,59 +366,30 @@
 <div class="page">
 
   <header class="hero" id="top">
-    <p class="eyebrow">NYC Transportation Analysis &middot; 2024</p>
-    <h1>Where bikes are needed, and when: a year of Citi Bike</h1>
+    <p class="eyebrow">NYC Citi Bike &middot; 2024 &middot; <span data-fact="total_rides">?</span> trips</p>
+    <h1>Where bikes are needed, and when</h1>
     <p class="tagline">
-      <span data-fact="total_rides">44,158,430</span> trips, joined to NOAA weather and NYC's bike lane network, to answer an
-      operator's question: where do bikes pile up and run out, and can tomorrow's demand
-      be predicted station by station?
+      Where do bikes pile up and run out, and can tomorrow's demand be predicted station by station?
     </p>
     <ul class="key-findings">
-      <li><strong>The commute leaves about <span data-fact="bikes_to_move">5,927</span> bikes in the wrong place every weekday morning.</strong>
-        Residential stations empty out and office districts fill up, and the evening rush reverses it
-        (correlation <span data-fact="am_pm_corr_normalized">-0.80</span> even after adjusting for station size).</li>
-      <li><strong>Rain hurts most when it falls at rush hour.</strong> Rain during commute hours cuts a day's rides by
-        <span data-fact="commute_rain_effect">29%</span> (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>); rain only at other times, by <span data-fact="offpeak_rain_effect">7%</span>.</li>
-      <li><strong>Demand is forecastable a day ahead.</strong> On two months it never saw, the model's hourly error is
-        <span data-fact="forecast_vs_7d">17%</span> lower than the best simple rule (each station's average for that hour over the past week),
-        and it beat that rule in <span data-fact="backtest_wins">5</span> of <span data-fact="backtest_folds">5</span> monthly backtests.</li>
+      <li><strong><span data-fact="bikes_to_move">?</span> bikes end every weekday morning in the wrong place.</strong>
+        <span data-fact="drainer_count">?</span> stations lose bikes, <span data-fact="filler_count">?</span> gain them, and the evening reverses it.</li>
+      <li><strong>Rush-hour rain matters four times more than other rain.</strong>
+        Days with rain at commute hours have <span data-fact="commute_rain_effect">?</span> fewer rides
+        (95% CI <span data-fact="commute_rain_ci">?</span>); rain at other hours, <span data-fact="offpeak_rain_effect">?</span>.</li>
+      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day">?</span> accurate citywide per day,
+        <span data-fact="acc_borough_hour">?</span> per borough per hour.</strong>
+        Per station-hour, error is <span data-fact="forecast_vs_7d">?</span> below the best simple rule, in
+        <span data-fact="backtest_wins">?</span> of <span data-fact="backtest_folds">?</span> monthly backtests.</li>
     </ul>
     <div class="stat-row" id="overview-stat-row"></div>
   </header>
 
-  <section class="section-block prose" id="data">
-    <p class="section-kicker">01 &middot; The data</p>
-    <h2>A year of trips, one cleaning pipeline</h2>
-    <p>
-      The trip data is all of 2024 from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike's public System Data feed</a>:
-      twelve monthly files downloaded from Citi Bike's S3 bucket at build time, with no data
-      committed to the repo. Every number on this page comes from one shared cleaning module
-      (<code>scripts/pipeline.py</code>), so totals agree across sections. Its rules, in order:
-      drop duplicate rides, drop trips that spill outside their month at the file's edges,
-      drop trips missing a start or end station or coordinates, drop trips with non-positive
-      duration, and drop trips over 24 hours (Citi Bike's own definition of a lost or stolen
-      bike). That removes <span data-fact="removed_rows">144,779</span> of <span data-fact="raw_rows">44,303,209</span> raw rows (<span data-fact="removed_share">0.33%</span>), leaving
-      <strong><span data-fact="total_rides">44,158,430</span></strong> trips.
-    </p>
-    <p>
-      Two outside datasets fill in context: hourly and daily weather from
-      <a href="https://www.ncei.noaa.gov/" target="_blank" rel="noopener">NOAA's</a> official Central Park
-      station, and NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">bike lane network</a>
-      from NYC Open Data, used to show ridership against the infrastructure it rides on.
-    </p>
-    <ul>
-      <li><code>scripts/</code>: the pipeline that turns a year of raw trip data into everything on this page, one build script per section.</li>
-      <li><code>CitiBike_Analysis.ipynb</code>: an exploratory deep-dive into January 2024, including a member-vs-casual classifier.</li>
-      <li>Charts are plain HTML/SVG/JS with no charting library; the maps use <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.</li>
-    </ul>
-  </section>
-
-  <section class="section-block" id="when">
-    <p class="section-kicker">02 &middot; When they ride</p>
-    <h2>Ride Volume Heatmap</h2>
+  <section class="section-block" id="demand">
+    <p class="section-kicker">01 &middot; Demand</p>
+    <h2>Demand follows the commute, the season and the rain</h2>
     <p class="section-lede">
-      All of 2024's rides by hour of day and day of week. The weekday commute shows up as
-      two sharp columns at 8am and 5pm; weekends spread into one broad midday window.
+      Weekdays peak at 8am and 5pm; weekends form one midday hump. Rides double between a 5&deg;C day and a 25&deg;C day.
     </p>
     <div class="card">
       <div class="stat-row" id="heatmap-stat-row"></div>
@@ -480,26 +411,19 @@
         </div>
       </div>
     </div>
-
-    <h3 class="subsection-title" id="seasons">Across the year: seasons and weather</h3>
-    <p class="section-lede">
-      The weekly rhythm sits on top of a much bigger seasonal swing. Daily rides more
-      than quadrupled from the coldest days to the best ones, and every rainy day shows
-      up as a dip. Weather here is NOAA's official Central Park station.
-    </p>
-    <div class="card">
+    <div class="card card-gap">
       <div class="stat-row" id="season-stat-row"></div>
-      <p class="chart-title">Rides per day, 2024</p>
+      <p class="chart-title">Rides per day</p>
       <div class="chart-box" id="daily-chart"></div>
       <div class="season-grid">
         <div>
-          <p class="chart-title">Warmer days, more rides (until it gets hot)</p>
-          <p class="chart-subtitle">Average rides on dry weekdays, by the day's high temperature</p>
+          <p class="chart-title">Rides by temperature</p>
+          <p class="chart-subtitle">Average rides on dry weekdays, by the day's high</p>
           <div class="chart-box" id="temp-chart"></div>
         </div>
         <div>
-          <p class="chart-title">What weather costs</p>
-          <p class="chart-subtitle">Change in daily rides vs. a dry day with the same temperature and weekday, with 95% intervals</p>
+          <p class="chart-title">Rides on rainy days and holidays</p>
+          <p class="chart-subtitle">Difference from a dry day with the same temperature and weekday; 95% intervals</p>
           <div class="effect-list" id="effect-list"></div>
           <p class="chart-note" id="effect-note"></p>
         </div>
@@ -508,15 +432,10 @@
   </section>
 
   <section class="section-block" id="where">
-    <p class="section-kicker">03 &middot; Where they ride</p>
-    <h2>Ridership Map</h2>
-    <p class="section-lede">
-      Station-level trip-start density against NYC DOT's actual bike lane network —
-      scrub through the hours to watch the commute rush move across the city, and
-      toggle either layer off to isolate the other.
-    </p>
+    <p class="section-kicker">02 &middot; Where</p>
+    <h2>Manhattan has <span data-fact="manhattan_station_share">?</span> of stations and <span data-fact="manhattan_ride_share">?</span> of rides</h2>
+    <p class="section-lede">Trip starts per station over NYC's bike lane network. Drag the slider to watch the rush move.</p>
     <div class="card">
-      <div class="stat-row" id="map-stat-row"></div>
       <div class="controls">
         <div class="toggle-group">
           <button class="toggle-btn" id="toggle-heat" aria-pressed="true" type="button">
@@ -541,28 +460,15 @@
           <div class="legend-boro-list" id="legend-boro-list"></div>
         </div>
       </div>
+      <table class="data-table metrics-table table-gap" id="borough-table"></table>
     </div>
-
-    <p class="section-lede boro-lede">
-      Manhattan's volume is so much higher than the rest of the city that on
-      the map above, real outer-borough stations can read as empty space next
-      to it — every station shown there is genuine (confirmed against actual
-      NYC borough boundaries, not a rough guess), just comparatively quiet.
-      Below, each borough gets its own map, its own zoom, and its own
-      brightness scale, so its stations are visible on their own terms.
-    </p>
-    <div class="boro-grid" id="boro-grid"></div>
   </section>
 
   <section class="section-block" id="rebalance">
-    <p class="section-kicker">04 &middot; Keeping bikes where they're needed</p>
+    <p class="section-kicker">03 &middot; Rebalancing</p>
     <h2>Every weekday morning, bikes drain out of neighborhoods and pile up in Midtown</h2>
     <p class="section-lede">
-      Every weekday morning, riders carry bikes from residential neighborhoods into
-      job centers, and every evening they carry them back. Stations that lose bikes
-      faster than they gain them run empty; stations that gain them run out of docks.
-      This shows each station's average net flow during the weekday rush, the
-      imbalance Citi Bike's rebalancing crews have to undo.
+      Each station's average net flow (arrivals minus departures) in the weekday rush. Red stations run empty; blue ones run out of docks.
     </p>
     <div class="card">
       <div class="stat-row" id="rebalance-stat-row"></div>
@@ -575,184 +481,94 @@
       <div id="rebalance-map"></div>
       <div class="legend-row">
         <div class="legend-item"><span class="legend-diverge" id="diverge-ramp"></span>
-          <span id="diverge-label">Loses bikes &larr; balanced &rarr; gains bikes (avg per weekday rush)</span></div>
+          <span>Loses bikes &larr; balanced &rarr; gains bikes (average per weekday rush)</span></div>
       </div>
       <div class="rebalance-tables">
         <div>
           <p class="chart-title">Biggest morning losers</p>
-          <p class="chart-subtitle">Need bikes delivered before 7am</p>
           <table class="data-table" id="drainers-table"></table>
         </div>
         <div>
           <p class="chart-title">Biggest morning gainers</p>
-          <p class="chart-subtitle">Need bikes removed, or they run out of docks</p>
           <table class="data-table" id="fillers-table"></table>
         </div>
       </div>
-      <p class="chart-title">Bikes to move back each weekday morning, by month</p>
-      <div class="chart-box" id="rebalance-monthly"></div>
       <p class="chart-note">
-        A lower bound: the sum of every losing station's average morning deficit. It ignores
-        dock capacity (not in the trip data), timing within the rush, and day-to-day variation.
+        "Bikes to move" sums every losing station's average morning deficit. It is a lower bound: the trip data has no dock capacity.
       </p>
     </div>
   </section>
 
   <section class="section-block" id="forecast">
-    <p class="section-kicker">05 &middot; Forecasting demand</p>
-    <h2>Predicting tomorrow's departures and arrivals, station by station</h2>
+    <p class="section-kicker">04 &middot; Forecast</p>
+    <h2>A day-ahead forecast for every station</h2>
     <p class="section-lede">
-      Rebalancing works better when crews know where demand is coming. Two gradient-boosted
-      models predict hourly departures and arrivals for every station using only what's known
-      the day before: the calendar, the weather, and each station's recent history. They train
-      on January&ndash;October and are scored on November&ndash;December, months they never saw,
-      against the simple rules a planner would otherwise use. The strongest of those rules,
-      "the average of this hour over the past week", is also the model's most important input,
-      so the question is how much the model adds on top of it.
+      Gradient-boosted models predict tomorrow's hourly departures and arrivals at <span data-fact="forecast_stations">?</span> stations
+      from the calendar, the weather and each station's history. Trained on January&ndash;October, scored on November&ndash;December.
     </p>
     <div class="card">
       <div class="stat-row" id="forecast-stat-row"></div>
-      <p class="chart-title">Accuracy on the held-out months (Nov&ndash;Dec 2024)</p>
-      <p class="chart-subtitle">Mean absolute error in trips; lower is better. Daily = station-day totals.</p>
-      <table class="data-table metrics-table" id="forecast-table"></table>
 
-      <p class="chart-title">Does it help a dispatcher?</p>
-      <p class="chart-subtitle">Weekday 7&ndash;10am net flow (arrivals minus departures) per station, from the two models combined</p>
-      <table class="data-table metrics-table" id="netflow-table"></table>
+      <p class="chart-title">Accuracy by planning level</p>
+      <p class="chart-subtitle">Same forecasts, summed to each level. Accuracy = 100% &minus; total absolute error &divide; total trips.</p>
+      <table class="data-table metrics-table" id="levels-table"></table>
+      <p class="chart-note" id="levels-note"></p>
 
       <p class="chart-title" id="example-title"></p>
-      <p class="chart-subtitle">Hourly departures for one week in December, with the model's 80% prediction band</p>
+      <p class="chart-subtitle">Hourly departures, one week in December, with the 80% prediction band</p>
       <div class="chart-box" id="example-chart"></div>
 
       <div class="season-grid">
         <div>
-          <p class="chart-title">Does the gain hold month to month?</p>
-          <p class="chart-subtitle">Rolling backtest: train on every earlier month, test on the next; MAE per station-hour</p>
-          <div class="chart-box" id="backtest-chart"></div>
+          <p class="chart-title">Error per station-hour, by method</p>
+          <p class="chart-subtitle">Mean absolute error in trips, test months</p>
+          <table class="data-table" id="forecast-table"></table>
         </div>
         <div>
-          <p class="chart-title">Where the error is, by hour</p>
-          <p class="chart-subtitle">Mean absolute error per station-hour, test months</p>
-          <div class="chart-box" id="error-hour-chart"></div>
+          <p class="chart-title">Month-by-month backtest</p>
+          <p class="chart-subtitle">Train on all earlier months, test on the next; error per station-hour</p>
+          <div class="chart-box" id="backtest-chart"></div>
         </div>
       </div>
-      <p class="chart-title">What the model relies on</p>
-      <p class="chart-subtitle">Increase in error when each input is shuffled (permutation importance, departures model)</p>
-      <div class="importance-chart" id="forecast-importance"></div>
+
+      <div class="season-grid">
+        <div>
+          <p class="chart-title">For a dispatcher: weekday 7&ndash;10am net flow</p>
+          <table class="data-table" id="netflow-table"></table>
+        </div>
+        <div>
+          <p class="chart-title">Does the 80% band hold?</p>
+          <table class="data-table" id="interval-table"></table>
+        </div>
+      </div>
       <p class="chart-note" id="forecast-note"></p>
     </div>
   </section>
 
-  <section class="section-block prose" id="report">
-    <p class="section-kicker">06 &middot; The report</p>
-    <h2>What the data shows</h2>
-
-    <div class="report-block">
-      <h3>Who rides, and when</h3>
-      <p>
-        Members made up <strong><span data-fact="member_share">81%</span></strong> of 2024's <span data-fact="total_rides">44,158,430</span> trips and casual riders
-        <strong><span data-fact="casual_share">19%</span></strong>, rising to <span data-fact="casual_share_weekend">26%</span> on weekends. Electric bikes carried
-        <strong><span data-fact="electric_share">66%</span></strong> of trips. Casual trips run longer (median <strong><span data-fact="median_minutes_casual">13</span> minutes</strong>
-        vs. <strong><span data-fact="median_minutes_member">8</span></strong> for members), the signature of leisure rides rather than commutes. On
-        weekdays, ridership forms a sharp double peak at 8am and 5pm; the busiest hour of the week is
-        <strong><span data-fact="busiest_slot">Tuesday at 5pm</span></strong>, with <span data-fact="busiest_slot_rides">698,495</span> trips starting in that hour across the year.
-        Weekends spread into one broad midday hump.
-      </p>
-    </div>
-
-    <div class="report-block">
-      <h3>Seasons and weather</h3>
-      <p>
-        The seasonal swing dwarfs the weekly one. The busiest day, <strong><span data-fact="busiest_day">2024-09-20</span></strong>, saw
-        <span data-fact="busiest_day_rides">193,685</span> rides; Christmas Day saw <span data-fact="quietest_day_rides">21,488</span>. On dry weekdays, ridership roughly
-        doubles between a 5&deg;C day and a 25&deg;C day, then levels off and dips slightly above 30&deg;C.
-        Hourly NOAA observations show that <em>when</em> it rains matters more than whether it rains: holding
-        temperature, weekday and growth fixed, rain during commute hours cuts a day's rides by
-        <strong><span data-fact="commute_rain_effect">29%</span></strong> (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>), rain only outside commute hours by just
-        <strong><span data-fact="offpeak_rain_effect">7%</span></strong> (<span data-fact="offpeak_rain_ci">2&ndash;10%</span>), and a heavy-rain day by
-        <strong><span data-fact="heavy_rain_effect">43%</span></strong> (<span data-fact="heavy_rain_ci">34&ndash;51%</span>). Federal holidays cost <span data-fact="holiday_effect">24%</span>
-        (<span data-fact="holiday_ci">2&ndash;37%</span>). Snow days are too few for a reliable estimate. The system also grew over the year, but
-        the model can only pin that growth to a wide range (<span data-fact="growth_ci">21&ndash;69%</span>), so it's treated as a control,
-        not a finding.
-      </p>
-    </div>
-
-    <div class="report-block">
-      <h3>Where they ride</h3>
-      <p>
-        Across <span data-fact="station_count">2,273</span> stations, Manhattan holds <strong><span data-fact="manhattan_station_share">31%</span></strong> of stations
-        but <strong><span data-fact="manhattan_ride_share">64%</span></strong> of rides. Brooklyn has slightly more stations
-        (<span data-fact="brooklyn_stations">716</span> vs. <span data-fact="manhattan_stations">706</span>) and <span data-fact="brooklyn_ride_share">26%</span> of rides; Queens
-        (<span data-fact="queens_station_share">20%</span> of stations) and the Bronx (<span data-fact="bronx_station_share">15%</span>) trail at
-        <span data-fact="queens_ride_share">7%</span> and <span data-fact="bronx_ride_share">3%</span>. Staten Island has DOT bike lanes but no Citi Bike
-        stations. The bike lane network reaches every borough; ridership does not follow it evenly.
-      </p>
-    </div>
-
-    <div class="report-block">
-      <h3>The rebalancing problem</h3>
-      <p>
-        Commuting creates a daily, predictable imbalance. On an average weekday morning
-        <strong><span data-fact="drainer_count">676</span></strong> stations lose two or more bikes and <strong><span data-fact="filler_count">409</span></strong> gain
-        two or more; undoing it takes at least <strong><span data-fact="bikes_to_move">5,927</span> bikes</strong> moved back every weekday morning,
-        peaking at <span data-fact="peak_move_bikes">8,517</span> in <span data-fact="peak_move_month">October</span> and falling to <span data-fact="low_move_bikes">4,026</span> in
-        <span data-fact="low_move_month">January</span>. Brooklyn as a whole loses about <span data-fact="brooklyn_am_loss">908</span> bikes each morning while Manhattan
-        gains about <span data-fact="manhattan_am_gain">637</span>, but the extremes are inside Manhattan: residential blocks like
-        W 43 St &amp; 10 Ave lose around 50 bikes a morning while office stations like E 47 St &amp; Park Ave gain
-        nearly 100. The evening rush reverses the morning (station-level correlation <span data-fact="am_pm_corr">-0.92</span>, and still
-        <span data-fact="am_pm_corr_normalized">-0.80</span> when each station's net flow is divided by its traffic, so it isn't just busy
-        stations being busy both ways).
-      </p>
-    </div>
-
-    <div class="report-block">
-      <h3>Forecasting demand</h3>
-      <p>
-        Because the cycle is predictable, it can be planned. Two gradient-boosted models forecast hourly departures
-        and arrivals for <span data-fact="forecast_stations">2,273</span> stations from what's known the day before, scored on
-        November&ndash;December after training on earlier months. The fair comparison is the best simple rule a
-        planner could use, each station's average for that hour over the past week, which is also the model's top
-        input. Against it, the model's departures error is <strong><span data-fact="forecast_vs_7d">17%</span> lower</strong>
-        (<span data-fact="forecast_mae">0.97</span> vs. <span data-fact="forecast_7d_mae">1.16</span> trips per station-hour), <span data-fact="forecast_vs_7d_daily">25%</span> lower at the
-        daily level, and arrivals improve by <span data-fact="arrivals_vs_7d">16%</span>. Against weaker rules the gap is larger
-        (<span data-fact="forecast_vs_yesterday">25%</span> vs. "same hour yesterday", <span data-fact="forecast_vs_naive">28%</span> vs. "same hour last week").
-        The gain holds in a rolling backtest: the model beat the 7-day rule in <span data-fact="backtest_wins">5</span> of
-        <span data-fact="backtest_folds">5</span> months, by <span data-fact="backtest_min_gain">13%</span> to <span data-fact="backtest_max_gain">18%</span>.
-      </p>
-      <p>
-        For a dispatcher, the question is net flow: which stations lose the most bikes before 10am. Combining the two
-        models, the error in each station's morning net flow drops from <span data-fact="net_mae_7d">3.1</span> to
-        <span data-fact="net_mae_model">2.7</span> bikes (<span data-fact="net_mae_gain">12%</span> lower). Picking each morning's
-        <span data-fact="net_top_k">20</span> biggest losers is harder: the model finds <span data-fact="net_precision_model">11.3</span>
-        of them on average and the 7-day rule <span data-fact="net_precision_7d">10.9</span>. The worst stations shift more from day
-        to day than the averages suggest, and the model's edge on that narrow task is small; its gains are spread across
-        the whole network and on unusual days (weather, holidays). An 80% prediction band, calibrated on held-out months,
-        contained <span data-fact="interval_coverage">93%</span> of test hours; that's wider than needed in quiet hours, where counts
-        near zero are lumpy, and close to target (<span data-fact="interval_coverage_busy">83%</span>) in busy ones.
-      </p>
-    </div>
-
-    <div class="report-block">
-      <h3>What it adds up to</h3>
-      <p>
-        Citi Bike in 2024 was a commuter-first, Manhattan-centered system whose load swings with the seasons and
-        with rush-hour rain. The same commute that drives ridership also drives its biggest operating cost, but that
-        cost is regular: a few hundred stations, the same direction every morning, reversed every evening. A
-        day-ahead forecast narrows the uncertainty about how big each morning's imbalance will be and adjusts for
-        weather and holidays before the rush; which exact stations end up worst on a given day stays noisy.
-      </p>
-      <p>
-        <em>Limitations.</em> The trip data has no dock capacity or real-time station status, so "bikes to move" is a
-        lower bound on rebalancing work, not a count of empty-station minutes; Citi Bike's live GBFS feed would be the
-        next step. The forecast uses observed weather, an upper bound on what forecast weather would give. Station
-        names are used as identifiers and a handful change during the year. Everything here is one year.
-      </p>
-    </div>
+  <section class="section-block prose" id="method">
+    <p class="section-kicker">05 &middot; Method and limits</p>
+    <h2>How it was done</h2>
+    <ul class="method-list">
+      <li><strong>Data.</strong> All 2024 trips from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike</a>.
+        Removed <span data-fact="removed_share">?</span> of <span data-fact="raw_rows">?</span> rows: out-of-month spillover, missing stations,
+        non-positive durations, trips over 24 hours. Weather: <a href="https://www.ncei.noaa.gov/" target="_blank" rel="noopener">NOAA</a>, Central Park.
+        Bike lanes and borough boundaries: <a href="https://opendata.cityofnewyork.us/" target="_blank" rel="noopener">NYC Open Data</a>.</li>
+      <li><strong>Weather.</strong> Regression of log daily rides on weekday, holiday, temperature, rain timing, snow and a growth trend.
+        Intervals from a 14-day block bootstrap. These are associations in one year of data, not controlled experiments.</li>
+      <li><strong>Rebalancing.</strong> Average net flow on <span data-fact="weekdays">?</span> non-holiday weekdays. The morning and evening flows
+        correlate at <span data-fact="am_pm_corr_normalized">?</span> after dividing by each station's traffic.</li>
+      <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">?</span> trees, settings chosen on September&ndash;October.
+        Every input is known a day ahead. Weather inputs are observed, not forecast, so weather's contribution is an upper bound.</li>
+      <li><strong>Limits.</strong> One year. No dock capacity or live station status. Station names serve as IDs.</li>
+      <li><strong>Code.</strong> <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/blob/main/CitiBike_2024.ipynb" target="_blank" rel="noopener">2024 notebook</a>,
+        <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/tree/main/scripts" target="_blank" rel="noopener">build scripts</a>,
+        and a <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/blob/main/CitiBike_Analysis.ipynb" target="_blank" rel="noopener">member-vs-casual classifier</a>.
+        Every number in this text is checked against the data in CI.</li>
+    </ul>
   </section>
 
   <footer class="site-footer section-block">
-    <p>Ridership: <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike System Data</a>, January&ndash;December 2024. Weather: NOAA NCEI, Central Park station. Bike lanes: NYC DOT's <a href="https://data.cityofnewyork.us/dataset/New-York-City-Bike-Routes/mzxg-pwib" target="_blank" rel="noopener">New York City Bike Routes</a> dataset (current segments), via NYC Open Data. Basemaps: Esri, HERE, Garmin, &copy; OpenStreetMap contributors.</p>
-    <p>See the full analysis in <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis" target="_blank" rel="noopener">the repository</a>.</p>
+    <p>Data: Citi Bike System Data, NOAA NCEI, NYC Open Data. Basemaps: Esri, HERE, Garmin, &copy; OpenStreetMap contributors.</p>
   </footer>
 
 </div>
@@ -942,24 +758,9 @@
     const stationsData = window.STATIONS_DATA;
     const bikePathsData = window.BIKE_PATHS_DATA;
 
-    const totalRides = stationsData.stations.reduce((sum, s) => sum + s.total, 0);
-    const stats = [
-      { label: "Total rides analyzed", value: totalRides.toLocaleString() },
-      { label: "Stations mapped", value: stationsData.stations.length.toLocaleString() },
-      { label: "Bike lane segments", value: window.SUMMARY_DATA.bike_lane_segments.toLocaleString() },
-    ];
-    const statRow = document.getElementById("map-stat-row");
-    stats.forEach(s => {
-      const el = document.createElement("div");
-      el.className = "stat-tile";
-      el.innerHTML = `<div class="label">${s.label}</div><div class="value">${s.value}</div>`;
-      statRow.appendChild(el);
-    });
-
     if (typeof L === "undefined" || typeof L.heatLayer !== "function") {
       const msg = '<p class="map-fallback">The map library (Leaflet) couldn\'t load, so the maps are unavailable. Try reloading, or disabling a content blocker for this page.</p>';
       document.getElementById("map").innerHTML = msg;
-      document.getElementById("boro-grid").innerHTML = msg;
       return;
     }
 
@@ -1158,81 +959,6 @@
 
     updateHour();
 
-    // ---- per-borough small multiples ----
-    // The citywide map above normalizes every station against the single
-    // busiest station in the whole system (Manhattan). That's correct for
-    // showing citywide scale, but it means a real, staffed outer-borough
-    // station can render as almost nothing next to Manhattan's peak — not
-    // because it's missing, but because it's being measured on the wrong
-    // scale. Each panel below re-normalizes against that borough's own
-    // busiest station instead, so real stations that get crushed above are
-    // visible here.
-    const BOROUGHS = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"];
-    const boroSlug = (b) => b.toLowerCase().replace(/\s+/g, "-");
-    const miniMaps = [];
-    const boroGrid = document.getElementById("boro-grid");
-    const boroSummary = (window.SUMMARY_DATA && window.SUMMARY_DATA.by_borough) || {};
-
-    BOROUGHS.forEach((boro) => {
-      const info = boroSummary[boro];
-      const card = document.createElement("div");
-      card.className = "boro-card";
-      card.innerHTML = `
-        <h3>${boro}</h3>
-        <p class="boro-stats">${info ? `${info.stations.toLocaleString()} stations &middot; ${info.rides.toLocaleString()} rides (${(info.ride_share * 100).toFixed(1)}% of citywide)` : ""}</p>
-        <div class="boro-map" id="boro-map-${boroSlug(boro)}"></div>
-        ${info && info.stations === 0 ? '<p class="boro-note">No Citi Bike stations here in 2024 — bike lanes shown for context.</p>' : ""}
-      `;
-      boroGrid.appendChild(card);
-    });
-
-    BOROUGHS.forEach((boro) => {
-      const boroStations = stationsData.stations.filter(s => s.boro === boro);
-      const boroLaneFeatures = bikePathsData.features.filter(f => f.properties.boro_name === boro);
-      const color = boroColors()[boro] || "#898781";
-
-      const miniMap = L.map(`boro-map-${boroSlug(boro)}`, {
-        zoomControl: false,
-        scrollWheelZoom: false,
-        attributionControl: false,
-      });
-
-      const miniLightTiles = basemapTiles("World_Light_Gray_Base", false);
-      const miniDarkTiles = basemapTiles("World_Dark_Gray_Base", false);
-      let miniCurrentTiles = isDark() ? miniDarkTiles : miniLightTiles;
-      miniCurrentTiles.addTo(miniMap);
-
-      const miniLaneLayer = L.geoJSON({ type: "FeatureCollection", features: boroLaneFeatures }, {
-        style: () => ({ color, weight: 1.5, opacity: 0.75 }),
-      }).addTo(miniMap);
-
-      let miniMarkerLayer = null;
-      if (boroStations.length) {
-        const boroMax = Math.max(1, ...boroStations.map(s => s.total));
-        miniMarkerLayer = L.layerGroup(
-          boroStations.map(s => {
-            const scale = Math.sqrt(s.total / boroMax);
-            return L.circleMarker([s.lat, s.lng], {
-              radius: 2 + scale * 5,
-              weight: 1,
-              color: "#fff",
-              fillColor: color,
-              fillOpacity: 0.35 + scale * 0.5,
-              opacity: 0.5 + scale * 0.5,
-            }).bindTooltip(`<b>${s.name}</b><br>${s.total.toLocaleString()} rides (all day)`, { className: "station-tip" });
-          })
-        ).addTo(miniMap);
-        miniMap.fitBounds(L.latLngBounds(boroStations.map(s => [s.lat, s.lng])), { padding: [24, 24] });
-      } else if (boroLaneFeatures.length) {
-        miniMap.fitBounds(miniLaneLayer.getBounds(), { padding: [24, 24] });
-      }
-
-      miniMaps.push({
-        miniMap, miniLaneLayer, miniMarkerLayer, miniLightTiles, miniDarkTiles, boro,
-        setTiles(next) { if (miniCurrentTiles !== next) { miniMap.removeLayer(miniCurrentTiles); next.addTo(miniMap); miniCurrentTiles = next; } },
-      });
-    });
-
     if (window.matchMedia) {
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
         applyTiles();
@@ -1244,15 +970,6 @@
           dashArray: feature.properties.facilitycl === "III" ? "1,4" : null,
         }));
         paintBoroLegend();
-
-        miniMaps.forEach(m => {
-          m.setTiles(isDark() ? m.miniDarkTiles : m.miniLightTiles);
-          const color = boroColors()[m.boro] || "#898781";
-          m.miniLaneLayer.setStyle(() => ({ color, weight: 1.5, opacity: 0.75 }));
-          if (m.miniMarkerLayer) {
-            m.miniMarkerLayer.eachLayer(marker => marker.setStyle({ fillColor: color }));
-          }
-        });
       });
     }
   });
@@ -1397,10 +1114,8 @@
     paintEffects();
     Charts.onSchemeChange(paintEffects);
     document.getElementById("effect-note").textContent =
-      `Bars show the estimate; the lighter span and the right-hand range are 95% intervals from a block bootstrap ` +
-      `(${m.bootstrap.resamples.toLocaleString()} resamples of ${m.bootstrap.block_days}-day blocks). Log-linear model of daily rides on ` +
-      `day of week, holidays, temperature, rain timing, snow and growth over the year (R² ${m.r2.toFixed(2)}). ` +
-      `Snow isn't shown: with only ${m.days_flagged.snow} snow days its interval includes zero.`;
+      `Regression of daily rides (R² ${m.r2.toFixed(2)}); intervals from a ${m.bootstrap.block_days}-day block bootstrap. ` +
+      `Snow is omitted: ${m.days_flagged.snow} snow days are too few to estimate.`;
   });
 
   // ================= rebalancing =================
@@ -1408,23 +1123,16 @@
     const d = window.REBALANCING_DATA;
     statTiles("rebalance-stat-row", [
       { label: "Bikes to move back, per weekday morning", value: d.bikes_to_move_am.toLocaleString() },
-      { label: "Stations losing 2+ bikes each morning", value: d.drainer_count.toLocaleString() },
-      { label: "Stations gaining 2+", value: d.filler_count.toLocaleString() },
-      { label: "Morning vs. evening flow correlation", value: d.am_pm_correlation.toFixed(2) },
+      { label: "Stations losing 2+ bikes", value: d.drainer_count.toLocaleString() },
+      { label: "Stations gaining 2+ bikes", value: d.filler_count.toLocaleString() },
     ]);
 
     const rows = list => list.map((s, i) => ({
       cells: [String(i + 1), `${s.name} (${s.boro})`, (s.am_net > 0 ? "+" : "") + s.am_net.toFixed(0), `${s.am_dep.toFixed(0)} → ${s.am_arr.toFixed(0)}`],
     }));
     const headers = [{ label: "#" }, { label: "Station" }, { label: "Net bikes", num: true }, { label: "Out → in", num: true }];
-    fillTable("drainers-table", headers, rows(d.top_drainers));
-    fillTable("fillers-table", headers, rows(d.top_fillers));
-
-    Charts.barChart(document.getElementById("rebalance-monthly"), {
-      bars: d.monthly.map(m => ({ label: MONTHS[m.month - 1], value: m.bikes_to_move_am, title: `${MONTHS[m.month - 1]} 2024` })),
-      color: BLUE, valueLabel: "bikes per weekday morning", valueFormat: v => Math.round(v).toLocaleString(),
-      height: 200, ariaLabel: "Bikes to move back each weekday morning, by month",
-    });
+    fillTable("drainers-table", headers, rows(d.top_drainers.slice(0, 5)));
+    fillTable("fillers-table", headers, rows(d.top_fillers.slice(0, 5)));
 
     // diverging color: red = loses bikes, gray = balanced, blue = gains bikes
     const MID = { light: "#d9d8d4", dark: "#4a4a46" };
@@ -1498,49 +1206,50 @@
     Charts.onSchemeChange(() => { applyTiles(); paintStations(); });
   });
 
+  // ================= borough table =================
+  runSection("borough table", function () {
+    const by = window.SUMMARY_DATA.by_borough;
+    const share = v => (v * 100).toFixed(0) + "%";
+    fillTable("borough-table",
+      [{ label: "Borough" }, { label: "Stations", num: true }, { label: "Share of stations", num: true }, { label: "Share of rides", num: true }],
+      ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"].map(b => ({
+        cells: [b, by[b].stations.toLocaleString(), share(by[b].station_share), share(by[b].ride_share)],
+      })));
+  });
+
   // ================= demand forecast =================
   runSection("forecast section", function () {
     const f = window.FORECAST_DATA;
     const dep = f.departures, arr = f.arrivals, imp = f.improvement, nf = f.net_flow_am, iv = f.intervals;
+    const p0 = v => (v * 100).toFixed(0) + "%";
+    const level = k => dep.levels.find(l => l.level === k);
+    const wins = f.backtest.filter(b => b.model < b.seven_day_mean).length;
     statTiles("forecast-stat-row", [
-      { label: "Error per station-hour", value: dep.hourly.model.mae.toFixed(2) + " trips" },
-      { label: "vs. best simple rule (7-day average)", value: pct(-imp.vs_seven_day_mean_hourly) + " error" },
-      { label: "Test hours inside the 80% band", value: (iv.coverage * 100).toFixed(0) + "%" },
-      { label: "Stations forecast", value: f.stations.toLocaleString() },
+      { label: "Citywide, per day", value: p0(level("system_day").model) + " accurate" },
+      { label: "Per borough, per hour", value: p0(level("borough_hour").model) + " accurate" },
+      { label: "Station-hour error vs. best simple rule", value: pct(-imp.vs_seven_day_mean_hourly) },
+      { label: "Monthly backtests won", value: `${wins} of ${f.backtest.length}` },
     ]);
 
-    const fmt = v => v.toFixed(2);
-    const row = (label, key, hl) => ({
-      highlight: hl,
-      cells: [label, fmt(dep.hourly[key].mae), (dep.hourly[key].wmape * 100).toFixed(0) + "%",
-        dep.daily[key] ? fmt(dep.daily[key].mae) : "–", fmt(arr.hourly[key].mae)],
-    });
-    fillTable("forecast-table",
-      [{ label: "Method" }, { label: "Departures, hourly", num: true }, { label: "Hourly WMAPE", num: true },
-       { label: "Departures, daily", num: true }, { label: "Arrivals, hourly", num: true }],
-      [
-        row("Gradient-boosted model", "model", true),
-        row("Same hour, 7-day average (best simple rule)", "seven_day_mean"),
-        row("Same hour yesterday", "yesterday"),
-        row("Same hour last week", "seasonal_naive"),
-        row("Station's usual level (hour × weekday/weekend)", "station_profile"),
-      ]);
-
-    fillTable("netflow-table",
-      [{ label: "Method" }, { label: "Net-flow error per station-morning", num: true },
-       { label: `Of the ${nf.top_k} biggest losers each morning, how many it flagged`, num: true }],
-      [
-        { highlight: true, cells: ["Model", nf.mae.model.toFixed(1) + " bikes", (nf.precision_losers.model * nf.top_k).toFixed(1)] },
-        { cells: ["Same hour, 7-day average", nf.mae.seven_day_mean.toFixed(1) + " bikes", (nf.precision_losers.seven_day_mean * nf.top_k).toFixed(1)] },
-      ]);
+    fillTable("levels-table",
+      [{ label: "Forecast for" }, { label: "Average trips", num: true }, { label: "Model", num: true },
+       { label: "7-day average rule", num: true }, { label: "Chance ceiling", num: true }],
+      dep.levels.map(l => ({
+        highlight: l.level === "system_day",
+        cells: [l.label, l.avg_trips.toLocaleString(), p0(l.model), p0(l.seven_day_mean), p0(l.chance_ceiling)],
+      })));
+    const sh = level("station_hour");
+    document.getElementById("levels-note").textContent =
+      `Chance ceiling: the accuracy a perfect forecast of the expected count would score if trips arrived at random (Poisson) around it. ` +
+      `A station averages ${sh.avg_trips} trips an hour, so luck alone caps station-hour accuracy near ${p0(sh.chance_ceiling)}; ` +
+      `real demand is burstier than Poisson, so the true cap is lower.`;
 
     const ex = f.example.series;
-    document.getElementById("example-title").textContent = `Example: ${f.example.station}, the busiest station in the test period`;
+    document.getElementById("example-title").textContent = `${f.example.station}, the busiest station in the test months`;
     const dayTicks = [];
     ex.forEach((p, i) => {
       if (p.t.endsWith("T00")) {
-        const dt = new Date(p.t + ":00:00");
-        dayTicks.push({ x: i, label: dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }) });
+        dayTicks.push({ x: i, label: new Date(p.t + ":00:00").toLocaleDateString("en-US", { weekday: "short", day: "numeric" }) });
       }
     });
     Charts.lineChart(document.getElementById("example-chart"), {
@@ -1550,14 +1259,25 @@
         { name: "Model", color: ORANGE, values: ex.map(p => p.pred) },
         { name: "Same hour last week", color: GRAY, values: ex.map(p => p.naive), dash: "4 3", width: 1.5 },
       ],
-      band: { name: "80% band", color: ORANGE, lower: ex.map(p => p.p10), upper: ex.map(p => p.p90) },
+      band: { name: "80% band", color: ORANGE, lower: ex.map(p => p.lo), upper: ex.map(p => p.hi) },
       xTicks: dayTicks,
       xTitle: i => new Date(ex[i].t + ":00:00").toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric" }),
       valueFormat: v => (Math.round(v * 10) / 10).toLocaleString(),
       height: 240, ariaLabel: "Hourly departures for one station over one week: actual, model with 80% band, and last week",
     });
 
-    const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const fmt = v => v.toFixed(2);
+    const row = (label, key, hl) => ({ highlight: hl, cells: [label, fmt(dep.hourly[key].mae), fmt(arr.hourly[key].mae)] });
+    fillTable("forecast-table",
+      [{ label: "Method" }, { label: "Departures", num: true }, { label: "Arrivals", num: true }],
+      [
+        row("Model", "model", true),
+        row("Same hour, 7-day average", "seven_day_mean"),
+        row("Same hour yesterday", "yesterday"),
+        row("Same hour last week", "seasonal_naive"),
+        row("Station's usual level", "station_profile"),
+      ]);
+
     Charts.lineChart(document.getElementById("backtest-chart"), {
       x: f.backtest.map(b => b.month),
       series: [
@@ -1565,53 +1285,30 @@
         { name: "7-day average", color: BLUE, values: f.backtest.map(b => b.seven_day_mean) },
         { name: "Same hour last week", color: GRAY, values: f.backtest.map(b => b.seasonal_naive), dash: "4 3", width: 1.5 },
       ],
-      xTicks: f.backtest.map(b => ({ x: b.month, label: MONTH_SHORT[b.month - 1] })),
-      xTitle: i => `${MONTH_SHORT[f.backtest[i].month - 1]} 2024 (trained on Jan–${MONTH_SHORT[f.backtest[i].month - 2]})`,
+      xTicks: f.backtest.map(b => ({ x: b.month, label: MONTHS[b.month - 1] })),
+      xTitle: i => `${MONTHS[f.backtest[i].month - 1]} 2024 (trained on Jan–${MONTHS[f.backtest[i].month - 2]})`,
       valueFormat: v => v.toFixed(2),
-      height: 220, ariaLabel: "Rolling monthly backtest: model vs. 7-day average vs. last week",
+      height: 200, ariaLabel: "Rolling monthly backtest: model vs. 7-day average vs. last week",
     });
 
-    Charts.lineChart(document.getElementById("error-hour-chart"), {
-      x: f.by_hour.map(r => r.hour),
-      series: [
-        { name: "Model", color: ORANGE, values: f.by_hour.map(r => r.model_mae) },
-        { name: "7-day average", color: BLUE, values: f.by_hour.map(r => r.seven_day_mae) },
-        { name: "Same hour last week", color: GRAY, values: f.by_hour.map(r => r.naive_mae), dash: "4 3", width: 1.5 },
-      ],
-      xTicks: [0, 6, 12, 18, 23].map(x => ({ x, label: x === 0 ? "12am" : x === 12 ? "12pm" : x < 12 ? x + "am" : (x - 12) + "pm" })),
-      xTitle: i => `${i}:00`,
-      valueFormat: v => v.toFixed(2),
-      height: 220, ariaLabel: "Mean absolute error by hour of day",
-    });
+    fillTable("netflow-table",
+      [{ label: "Method" }, { label: "Error per station", num: true }, { label: `Top-${nf.top_k} losers found`, num: true }],
+      [
+        { highlight: true, cells: ["Model", nf.mae.model.toFixed(1) + " bikes", (nf.precision_losers.model * nf.top_k).toFixed(1)] },
+        { cells: ["7-day average", nf.mae.seven_day_mean.toFixed(1) + " bikes", (nf.precision_losers.seven_day_mean * nf.top_k).toFixed(1)] },
+      ]);
 
-    const impEl = document.getElementById("forecast-importance");
-    const shown = f.feature_importances.filter(x => x.importance > 0);
-    const maxImp = Math.max(...shown.map(x => x.importance));
-    shown.forEach(x => {
-      const r = document.createElement("div");
-      r.className = "imp-row";
-      const label = document.createElement("span");
-      label.className = "imp-label";
-      label.textContent = x.label;
-      const track = document.createElement("div");
-      track.className = "imp-bar-track";
-      const bar = document.createElement("div");
-      bar.className = "imp-bar";
-      bar.style.width = (x.importance / maxImp) * 100 + "%";
-      track.appendChild(bar);
-      const val = document.createElement("span");
-      val.className = "imp-value";
-      val.textContent = "+" + x.importance.toFixed(3);
-      r.append(label, track, val);
-      impEl.appendChild(r);
-    });
+    const ivRow = (label, k) => ({ cells: [label, p0(iv[k].share_of_hours), p0(iv[k].coverage), p0(iv[k].above), p0(iv[k].below)] });
+    fillTable("interval-table",
+      [{ label: "Hours with forecast of" }, { label: "Share", num: true }, { label: "Inside", num: true },
+       { label: "Above", num: true }, { label: "Below", num: true }],
+      [ivRow("5+ trips", "busy"), ivRow("1–5 trips", "medium"), ivRow("Under 1 trip", "quiet"), ivRow("All hours", "all")]);
 
+    const base = f.tuning[0].valid_mae, best = Math.min(...f.tuning.slice(1).map(t => t.valid_mae));
     document.getElementById("forecast-note").textContent =
-      `The 80% band is calibrated on Sep–Oct: validation predictions are binned by level, and each bin's 10th–90th percentile ` +
-      `of actual trips becomes the band (split conformal). In the test months ${(iv.coverage * 100).toFixed(0)}% of hours fell inside it ` +
-      `(${(iv.coverage_busy_hours * 100).toFixed(0)}% of busy hours). Backtest folds use a smaller fixed-size model on a 5M-row sample, ` +
-      `so their errors sit slightly above the main result. Weather inputs are observed, not forecast, so these results are an upper ` +
-      `bound on what weather adds.`;
+      `Band: per level of forecast, the shortest range that held 80% of September–October outcomes. Trip counts are whole numbers, ` +
+      `so quiet hours can't land on exactly 80%. Tuning: adding recent-history and rain inputs and resizing the trees cut validation ` +
+      `error ${((1 - best / base) * 100).toFixed(1)}%; trees were added until 50 more improved it by under 0.05% (${dep.trees.toLocaleString()} trees).`;
   });
 })();
 </script>

@@ -59,6 +59,10 @@ def _effect(d, name):
     return d["seasonality"]["model"]["effects"][name]
 
 
+def _level(d, key):
+    return next(x for x in d["forecast"]["departures"]["levels"] if x["level"] == key)
+
+
 def _busiest_slot(d):
     return max(d["heatmap"]["data"], key=lambda r: r["rides"])
 
@@ -119,24 +123,27 @@ FACTS = {
     "peak_move_bikes": lambda d: n(_month(d, True)["bikes_to_move_am"]),
     "low_move_month": lambda d: MONTHS[_month(d, False)["month"] - 1],
     "low_move_bikes": lambda d: n(_month(d, False)["bikes_to_move_am"]),
+    "weekdays": lambda d: n(d["rebalancing"]["weekdays"]),
     # ---- forecast ----
     "forecast_stations": lambda d: n(d["forecast"]["stations"]),
+    "forecast_trees": lambda d: n(d["forecast"]["departures"]["trees"]),
     "forecast_mae": lambda d: f'{d["forecast"]["departures"]["hourly"]["model"]["mae"]:.2f}',
     "forecast_7d_mae": lambda d: f'{d["forecast"]["departures"]["hourly"]["seven_day_mean"]["mae"]:.2f}',
     "forecast_vs_7d": lambda d: pct(d["forecast"]["improvement"]["vs_seven_day_mean_hourly"]),
     "forecast_vs_naive": lambda d: pct(d["forecast"]["improvement"]["vs_seasonal_naive_hourly"]),
-    "forecast_vs_yesterday": lambda d: pct(d["forecast"]["improvement"]["vs_yesterday_hourly"]),
-    "forecast_vs_7d_daily": lambda d: pct(d["forecast"]["improvement"]["vs_seven_day_mean_daily"]),
     "arrivals_vs_7d": lambda d: pct(d["forecast"]["improvement"]["arrivals_vs_seven_day_mean_hourly"]),
+    "acc_station_hour": lambda d: pct(_level(d, "station_hour")["model"]),
+    "acc_station_day": lambda d: pct(_level(d, "station_day")["model"]),
+    "acc_borough_hour": lambda d: pct(_level(d, "borough_hour")["model"]),
+    "acc_system_hour": lambda d: pct(_level(d, "system_hour")["model"]),
+    "acc_system_day": lambda d: pct(_level(d, "system_day")["model"]),
+    "acc_system_day_7d": lambda d: pct(_level(d, "system_day")["seven_day_mean"]),
+    "ceiling_station_hour": lambda d: pct(_level(d, "station_hour")["chance_ceiling"]),
     "backtest_folds": lambda d: str(len(d["forecast"]["backtest"])),
     "backtest_wins": lambda d: str(sum(f["model"] < f["seven_day_mean"] for f in d["forecast"]["backtest"])),
-    "backtest_min_gain": lambda d: pct(min(1 - f["model"] / f["seven_day_mean"] for f in d["forecast"]["backtest"])),
-    "backtest_max_gain": lambda d: pct(max(1 - f["model"] / f["seven_day_mean"] for f in d["forecast"]["backtest"])),
-    "interval_coverage": lambda d: pct(d["forecast"]["intervals"]["coverage"]),
-    "interval_coverage_busy": lambda d: pct(d["forecast"]["intervals"]["coverage_busy_hours"]),
+    "interval_coverage_busy": lambda d: pct(d["forecast"]["intervals"]["busy"]["coverage"]),
     "net_mae_model": lambda d: f'{d["forecast"]["net_flow_am"]["mae"]["model"]:.1f}',
     "net_mae_7d": lambda d: f'{d["forecast"]["net_flow_am"]["mae"]["seven_day_mean"]:.1f}',
-    "net_mae_gain": lambda d: pct(1 - d["forecast"]["net_flow_am"]["mae"]["model"] / d["forecast"]["net_flow_am"]["mae"]["seven_day_mean"]),
     "net_top_k": lambda d: str(d["forecast"]["net_flow_am"]["top_k"]),
     "net_precision_model": lambda d: f'{d["forecast"]["net_flow_am"]["precision_losers"]["model"] * d["forecast"]["net_flow_am"]["top_k"]:.1f}',
     "net_precision_7d": lambda d: f'{d["forecast"]["net_flow_am"]["precision_losers"]["seven_day_mean"] * d["forecast"]["net_flow_am"]["top_k"]:.1f}',
