@@ -260,10 +260,12 @@ def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
             if cand[:2] < best[:2]:
                 best = cand
         lo_by_bin[b], hi_by_bin[b] = best[2], best[3]
-    # a higher forecast should never get a lower band: removes bin-to-bin jitter
+    # a higher forecast never gets a lower band, and the band is interpolated
+    # between bin centers so it doesn't jump when a forecast crosses a bin edge
     lo_by_bin, hi_by_bin = np.maximum.accumulate(lo_by_bin), np.maximum.accumulate(hi_by_bin)
-    new_bin = np.clip(np.searchsorted(edges, pred_new, side="right") - 1, 0, n_bins - 1)
-    return lo_by_bin[new_bin], hi_by_bin[new_bin]
+    centers = np.array([np.median(pred_cal[cal_bin == b]) if (cal_bin == b).any() else edges[b] for b in range(n_bins)])
+    # trip counts are whole numbers, so round the band outward
+    return np.floor(np.interp(pred_new, centers, lo_by_bin)), np.ceil(np.interp(pred_new, centers, hi_by_bin))
 
 
 def interval_report(y, pred, lo, hi) -> dict:
@@ -397,7 +399,7 @@ def departures_extras(year, grid, X, y, te, test, model, params, pred_va, y_va) 
             "station": str(busiest), "week_start": start.strftime("%Y-%m-%d"),
             "series": [
                 {"t": t.strftime("%Y-%m-%dT%H"), "actual": int(a), "pred": round(float(p), 2),
-                 "lo": float(lo_), "hi": float(hi_), "naive": int(n)}
+                 "lo": round(float(lo_), 1), "hi": round(float(hi_), 1), "naive": int(n)}
                 for t, a, p, lo_, hi_, n in zip(ex["hour_start"], ex["y"], ex["pred"], ex["lo"], ex["hi"], ex["lag_168"])
             ],
         },
