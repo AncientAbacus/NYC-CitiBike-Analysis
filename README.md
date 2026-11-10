@@ -17,17 +17,20 @@ where do bikes pile up and run out, and can tomorrow's demand be predicted stati
 
 Day-ahead forecast, tested on November–December after training on January–October:
 
-| Forecast for | Model accuracy | 7-day average rule |
-|---|---|---|
-| Whole system, one day | <!--fact:acc_system_day-->90%<!--/fact--> | <!--fact:acc_system_day_7d-->78%<!--/fact--> |
-| One borough, one hour | <!--fact:acc_borough_hour-->85%<!--/fact--> | |
-| One station, one day | <!--fact:acc_station_day-->80%<!--/fact--> | |
-| One station, one hour | <!--fact:acc_station_hour-->48%<!--/fact--> (chance ceiling ≈ <!--fact:ceiling_station_hour-->58%<!--/fact-->) | |
+| Forecast for | Model, actual weather | Model, yesterday's weather | 7-day average rule |
+|---|---|---|---|
+| Whole system, one day | <!--fact:acc_system_day-->90%<!--/fact--> | <!--fact:acc_system_day_prev-->83%<!--/fact--> | <!--fact:acc_system_day_7d-->78%<!--/fact--> |
+| One borough, one hour | <!--fact:acc_borough_hour-->85%<!--/fact--> | <!--fact:acc_borough_hour_prev-->78%<!--/fact--> | |
+| One station, one day | <!--fact:acc_station_day-->80%<!--/fact--> | <!--fact:acc_station_day_prev-->75%<!--/fact--> | |
+| One station, one hour | <!--fact:acc_station_hour-->48%<!--/fact--> (chance ceiling ≈ <!--fact:ceiling_station_hour-->58%<!--/fact-->) | <!--fact:acc_station_hour_prev-->44%<!--/fact--> | |
+
+The model is given the day's actual weather. Retrained knowing only yesterday's weather, it scores the
+second column; a real weather forecast sits between the two.
 
 Accuracy = 100% − total absolute error ÷ total trips. At a single station-hour the count is so small that
 chance alone caps accuracy; the ceiling shown assumes a perfect forecast with Poisson noise.
 
-- Station-hour error is <!--fact:forecast_vs_7d-->18%<!--/fact--> below the best simple rule (same hour's 7-day average) and
+- Station-hour error is <!--fact:forecast_vs_7d_prev-->13%<!--/fact-->–<!--fact:forecast_vs_7d-->18%<!--/fact--> (yesterday's vs. actual weather) below the best simple rule (same hour's 7-day average) and
   <!--fact:forecast_vs_naive-->30%<!--/fact--> below "same hour last week". It beat the best rule in <!--fact:backtest_wins-->5<!--/fact--> of
   <!--fact:backtest_folds-->5<!--/fact--> monthly backtests.
 - Weekday-morning net flow per station: error <!--fact:net_mae_model-->2.7<!--/fact--> bikes vs. <!--fact:net_mae_7d-->3.1<!--/fact-->.
@@ -43,7 +46,7 @@ chance alone caps accuracy; the ceiling shown assumes a perfect forecast with Po
 - **Forecast:** Poisson gradient boosting on station × hour counts. Inputs are all known a day ahead. Split by
   date; settings chosen on September–October; trees added until validation error stopped improving
   (<!--fact:forecast_trees-->350<!--/fact--> trees). 80% prediction bands by split conformal calibration.
-- **Limits:** observed, not forecast, weather. No dock capacity, so "bikes to move" is a lower bound. One year.
+- **Limits:** weather is bounded, not forecast (see table). No dock capacity, so "bikes to move" is a lower bound. One year.
 
 ## Repo
 

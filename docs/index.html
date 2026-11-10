@@ -338,6 +338,7 @@
   .data-table td strong { color: var(--text-primary); }
   .data-table tr.highlight td { color: var(--text-primary); font-weight: 600; }
   .metrics-table { max-width: 640px; margin-bottom: 8px; }
+  #levels-table { max-width: 860px; }
   @media (max-width: 640px) {
     /* wide metric tables scroll inside the card instead of widening the page */
     .metrics-table { display: block; overflow-x: auto; }
@@ -377,9 +378,9 @@
       <li><strong>Rush-hour rain matters several times more than other rain.</strong>
         Days with rain at commute hours have <span data-fact="commute_rain_effect">29%</span> fewer rides
         (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>); rain at other hours, <span data-fact="offpeak_rain_effect">7%</span>.</li>
-      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day">90%</span> accurate citywide per day,
-        <span data-fact="acc_borough_hour">85%</span> per borough per hour.</strong>
-        Per station-hour, error is <span data-fact="forecast_vs_7d">18%</span> below the best simple rule, in
+      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day_prev">83%</span>&ndash;<span data-fact="acc_system_day">90%</span> accurate citywide per day,
+        depending on how good the weather forecast is.</strong>
+        Per station-hour, error is <span data-fact="forecast_vs_7d_prev">13%</span>&ndash;<span data-fact="forecast_vs_7d">18%</span> below the best simple rule; it won
         <span data-fact="backtest_wins">5</span> of <span data-fact="backtest_folds">5</span> monthly backtests.</li>
     </ul>
     <div class="stat-row" id="overview-stat-row"></div>
@@ -558,7 +559,7 @@
       <li><strong>Rebalancing.</strong> Average net flow on <span data-fact="weekdays">251</span> non-holiday weekdays. The morning and evening flows
         correlate at <span data-fact="am_pm_corr_normalized">-0.80</span> after dividing by each station's traffic.</li>
       <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">350</span> trees, settings chosen on September&ndash;October.
-        Every input is known a day ahead. Weather inputs are observed, not forecast, so weather's contribution is an upper bound.</li>
+        Every input is known a day ahead except the weather, which is observed; the "yesterday's weather" column bounds what a real forecast would give.</li>
       <li><strong>Limits.</strong> One year. No dock capacity or live station status. Station names serve as IDs.</li>
       <li><strong>Code.</strong> <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/blob/main/CitiBike_2024.ipynb" target="_blank" rel="noopener">2024 notebook</a>,
         <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/tree/main/scripts" target="_blank" rel="noopener">build scripts</a>,
@@ -1225,22 +1226,24 @@
     const level = k => dep.levels.find(l => l.level === k);
     const wins = f.backtest.filter(b => b.model < b.seven_day_mean).length;
     statTiles("forecast-stat-row", [
-      { label: "Citywide, per day", value: p0(level("system_day").model) + " accurate" },
-      { label: "Per borough, per hour", value: p0(level("borough_hour").model) + " accurate" },
-      { label: "Station-hour error vs. best simple rule", value: pct(-imp.vs_seven_day_mean_hourly) },
+      { label: "Citywide per day, actual weather", value: p0(level("system_day").model) + " accurate" },
+      { label: "Citywide per day, yesterday's weather", value: p0(f.yesterdays_weather.levels.system_day) + " accurate" },
+      { label: "Station-hour error vs. best simple rule", value: `${pct(-f.yesterdays_weather.vs_seven_day_mean_hourly)} to ${pct(-imp.vs_seven_day_mean_hourly)}` },
       { label: "Monthly backtests won", value: `${wins} of ${f.backtest.length}` },
     ]);
 
     fillTable("levels-table",
-      [{ label: "Forecast for" }, { label: "Average trips", num: true }, { label: "Model", num: true },
-       { label: "7-day average rule", num: true }, { label: "Chance ceiling", num: true }],
+      [{ label: "Forecast for" }, { label: "Average trips", num: true }, { label: "Model, actual weather", num: true },
+       { label: "Model, yesterday's weather", num: true }, { label: "7-day average rule", num: true }, { label: "Chance ceiling", num: true }],
       dep.levels.map(l => ({
         highlight: l.level === "system_day",
         cells: [l.label, (l.avg_trips >= 100 ? Math.round(l.avg_trips) : l.avg_trips).toLocaleString(), p0(l.model),
-          p0(l.seven_day_mean), l.chance_ceiling > 0.995 ? ">99%" : p0(l.chance_ceiling)],
+          p0(f.yesterdays_weather.levels[l.level]), p0(l.seven_day_mean), l.chance_ceiling > 0.995 ? ">99%" : p0(l.chance_ceiling)],
       })));
     const sh = level("station_hour");
     document.getElementById("levels-note").textContent =
+      `Weather: the model is given the day's actual weather, which a real system would only have as a forecast. Retrained knowing ` +
+      `only yesterday's weather, it scores the second column. A real weather forecast sits between the two. ` +
       `Chance ceiling: the accuracy a perfect forecast of the expected count would score if trips arrived at random (Poisson) around it. ` +
       `A station averages ${sh.avg_trips} trips an hour, so luck alone caps station-hour accuracy near ${p0(sh.chance_ceiling)}; ` +
       `real demand is burstier than Poisson, so the true cap is lower.`;
