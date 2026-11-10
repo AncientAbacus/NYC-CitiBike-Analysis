@@ -260,6 +260,8 @@ def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
             if cand[:2] < best[:2]:
                 best = cand
         lo_by_bin[b], hi_by_bin[b] = best[2], best[3]
+    # a higher forecast should never get a lower band: removes bin-to-bin jitter
+    lo_by_bin, hi_by_bin = np.maximum.accumulate(lo_by_bin), np.maximum.accumulate(hi_by_bin)
     new_bin = np.clip(np.searchsorted(edges, pred_new, side="right") - 1, 0, n_bins - 1)
     return lo_by_bin[new_bin], hi_by_bin[new_bin]
 

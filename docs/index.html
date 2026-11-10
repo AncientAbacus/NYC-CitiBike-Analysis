@@ -366,21 +366,21 @@
 <div class="page">
 
   <header class="hero" id="top">
-    <p class="eyebrow">NYC Citi Bike &middot; 2024 &middot; <span data-fact="total_rides">?</span> trips</p>
+    <p class="eyebrow">NYC Citi Bike &middot; 2024 &middot; <span data-fact="total_rides">44,158,430</span> trips</p>
     <h1>Where bikes are needed, and when</h1>
     <p class="tagline">
       Where do bikes pile up and run out, and can tomorrow's demand be predicted station by station?
     </p>
     <ul class="key-findings">
-      <li><strong><span data-fact="bikes_to_move">?</span> bikes end every weekday morning in the wrong place.</strong>
-        <span data-fact="drainer_count">?</span> stations lose bikes, <span data-fact="filler_count">?</span> gain them, and the evening reverses it.</li>
+      <li><strong><span data-fact="bikes_to_move">5,927</span> bikes end every weekday morning in the wrong place.</strong>
+        <span data-fact="drainer_count">676</span> stations lose bikes, <span data-fact="filler_count">409</span> gain them, and the evening reverses it.</li>
       <li><strong>Rush-hour rain matters four times more than other rain.</strong>
-        Days with rain at commute hours have <span data-fact="commute_rain_effect">?</span> fewer rides
-        (95% CI <span data-fact="commute_rain_ci">?</span>); rain at other hours, <span data-fact="offpeak_rain_effect">?</span>.</li>
-      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day">?</span> accurate citywide per day,
-        <span data-fact="acc_borough_hour">?</span> per borough per hour.</strong>
-        Per station-hour, error is <span data-fact="forecast_vs_7d">?</span> below the best simple rule, in
-        <span data-fact="backtest_wins">?</span> of <span data-fact="backtest_folds">?</span> monthly backtests.</li>
+        Days with rain at commute hours have <span data-fact="commute_rain_effect">29%</span> fewer rides
+        (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>); rain at other hours, <span data-fact="offpeak_rain_effect">7%</span>.</li>
+      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day">90%</span> accurate citywide per day,
+        <span data-fact="acc_borough_hour">85%</span> per borough per hour.</strong>
+        Per station-hour, error is <span data-fact="forecast_vs_7d">18%</span> below the best simple rule, in
+        <span data-fact="backtest_wins">5</span> of <span data-fact="backtest_folds">5</span> monthly backtests.</li>
     </ul>
     <div class="stat-row" id="overview-stat-row"></div>
   </header>
@@ -433,7 +433,7 @@
 
   <section class="section-block" id="where">
     <p class="section-kicker">02 &middot; Where</p>
-    <h2>Manhattan has <span data-fact="manhattan_station_share">?</span> of stations and <span data-fact="manhattan_ride_share">?</span> of rides</h2>
+    <h2>Manhattan has <span data-fact="manhattan_station_share">31%</span> of stations and <span data-fact="manhattan_ride_share">64%</span> of rides</h2>
     <p class="section-lede">Trip starts per station over NYC's bike lane network. Drag the slider to watch the rush move.</p>
     <div class="card">
       <div class="controls">
@@ -503,7 +503,7 @@
     <p class="section-kicker">04 &middot; Forecast</p>
     <h2>A day-ahead forecast for every station</h2>
     <p class="section-lede">
-      Gradient-boosted models predict tomorrow's hourly departures and arrivals at <span data-fact="forecast_stations">?</span> stations
+      Gradient-boosted models predict tomorrow's hourly departures and arrivals at <span data-fact="forecast_stations">2,273</span> stations
       from the calendar, the weather and each station's history. Trained on January&ndash;October, scored on November&ndash;December.
     </p>
     <div class="card">
@@ -550,14 +550,14 @@
     <h2>How it was done</h2>
     <ul class="method-list">
       <li><strong>Data.</strong> All 2024 trips from <a href="https://citibikenyc.com/system-data" target="_blank" rel="noopener">Citi Bike</a>.
-        Removed <span data-fact="removed_share">?</span> of <span data-fact="raw_rows">?</span> rows: out-of-month spillover, missing stations,
+        Removed <span data-fact="removed_share">0.33%</span> of <span data-fact="raw_rows">44,303,209</span> rows: out-of-month spillover, missing stations,
         non-positive durations, trips over 24 hours. Weather: <a href="https://www.ncei.noaa.gov/" target="_blank" rel="noopener">NOAA</a>, Central Park.
         Bike lanes and borough boundaries: <a href="https://opendata.cityofnewyork.us/" target="_blank" rel="noopener">NYC Open Data</a>.</li>
       <li><strong>Weather.</strong> Regression of log daily rides on weekday, holiday, temperature, rain timing, snow and a growth trend.
         Intervals from a 14-day block bootstrap. These are associations in one year of data, not controlled experiments.</li>
-      <li><strong>Rebalancing.</strong> Average net flow on <span data-fact="weekdays">?</span> non-holiday weekdays. The morning and evening flows
-        correlate at <span data-fact="am_pm_corr_normalized">?</span> after dividing by each station's traffic.</li>
-      <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">?</span> trees, settings chosen on September&ndash;October.
+      <li><strong>Rebalancing.</strong> Average net flow on <span data-fact="weekdays">251</span> non-holiday weekdays. The morning and evening flows
+        correlate at <span data-fact="am_pm_corr_normalized">-0.80</span> after dividing by each station's traffic.</li>
+      <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">350</span> trees, settings chosen on September&ndash;October.
         Every input is known a day ahead. Weather inputs are observed, not forecast, so weather's contribution is an upper bound.</li>
       <li><strong>Limits.</strong> One year. No dock capacity or live station status. Station names serve as IDs.</li>
       <li><strong>Code.</strong> <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/blob/main/CitiBike_2024.ipynb" target="_blank" rel="noopener">2024 notebook</a>,
@@ -1236,7 +1236,8 @@
        { label: "7-day average rule", num: true }, { label: "Chance ceiling", num: true }],
       dep.levels.map(l => ({
         highlight: l.level === "system_day",
-        cells: [l.label, l.avg_trips.toLocaleString(), p0(l.model), p0(l.seven_day_mean), p0(l.chance_ceiling)],
+        cells: [l.label, (l.avg_trips >= 100 ? Math.round(l.avg_trips) : l.avg_trips).toLocaleString(), p0(l.model),
+          p0(l.seven_day_mean), l.chance_ceiling > 0.995 ? ">99%" : p0(l.chance_ceiling)],
       })));
     const sh = level("station_hour");
     document.getElementById("levels-note").textContent =
