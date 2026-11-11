@@ -17,13 +17,13 @@ Inputs, all known a day ahead:
 No day-of-year or month input: under a date split the test dates are values
 the trees never saw, and validation error rose with them.
 
+Hourly weather is only published to 2025-08-25, so the timeline ends there.
 Protocols, all by date:
-  headline   train before 2025-09-01, early-stop on Sep-Oct 2025, refit
-             before 2025-11-01, test Nov-Dec 2025. Unseen data from a later
-             year than most of the training data.
-  benchmark  the same model trained on 2024 only (before 2024-11-01,
-             early-stopped on Sep-Oct 2024), scored on the same 2025 test
-             months. The difference is what the extra data is worth.
+  headline   train on 2024 and 2025 up to 2025-04-01, early-stop on Apr-May
+             2025, refit up to 2025-06-01, test Jun-Aug 2025.
+  benchmark  the same model trained on 2024 only (early-stopped on Oct-Dec
+             2024), scored on the same 2025 test months. The difference is
+             what the five months of 2025 data are worth.
   weather    the headline model retrained with each weather input replaced
              by yesterday's value: a crude stand-in for a weather forecast.
              Real forecasts fall between this and the headline result.
@@ -55,8 +55,9 @@ from sklearn.inspection import permutation_importance
 from pipeline import REPO, load_clean_period, load_weather_hourly, period_months
 
 YEARS = [2024, 2025]
-HEADLINE = {"train_end": "2025-09-01", "valid_end": "2025-11-01", "test_start": "2025-11-01"}
-BENCHMARK = {"train_end": "2024-09-01", "valid_end": "2024-11-01", "test_start": "2025-11-01"}
+WEATHER_END = "2025-08-25"  # hourly weather is not published after this date
+HEADLINE = {"train_end": "2025-04-01", "valid_end": "2025-06-01", "test_start": "2025-06-01"}
+BENCHMARK = {"train_end": "2024-10-01", "valid_end": "2025-01-01", "test_start": "2025-06-01"}
 TRIP_COLS = ["started_at", "ended_at", "start_station_name", "end_station_name",
              "start_lat", "start_lng", "end_lat", "end_lng"]
 
@@ -118,9 +119,9 @@ class Timeline:
 
 
 def read_timeline(years, smoke=None) -> Timeline:
-    """Trip counts and station coordinates for all years, read one month at a time."""
+    """Trip counts and station coordinates up to WEATHER_END, read one month at a time."""
     t0 = pd.Timestamp(f"{years[0]}-01-01")
-    t1 = pd.Timestamp(f"{years[-1] + 1}-01-01")
+    t1 = pd.Timestamp(WEATHER_END)
     n_hours = int((t1 - t0) / pd.Timedelta(hours=1))
     idx_of, names = {}, []
     start_xy, end_xy = {}, {}
@@ -203,7 +204,11 @@ def hourly_arrays(tl: Timeline, years) -> dict:
 
     w = pd.concat([load_weather_hourly(str(y)) for y in years]).set_index("hour_start")
     w = w[~w.index.duplicated()].reindex(pd.date_range(tl.t0, periods=tl.n_hours, freq="h"))
-    w = w.interpolate(limit_direction="both")
+    gaps = int(w["temp_c"].isna().sum())
+    w = w.interpolate(limit=24, limit_direction="both")
+    if w["temp_c"].isna().any() or w["wind_ms"].isna().any():
+        raise ValueError("hourly weather has a gap longer than 24 hours inside the timeline")
+    print(f"weather: {gaps} missing hours filled by interpolation (gaps up to 24h)", flush=True)
     w["precip_mm"] = w["precip_mm"].fillna(0.0)
     w["precip_3h"] = w["precip_mm"].rolling(3, min_periods=1).sum()
     w["precip_day"] = pd.Series(w["precip_mm"].to_numpy()).groupby(days).transform("sum").to_numpy()
@@ -553,9 +558,9 @@ def main() -> None:
 
     # rolling backtest, one fold per month of the test year
     backtest = []
-    for month in range(8, 13):
+    for month in range(6, 9):
         start = tl.hour_of(f"2025-{month:02d}-01")
-        end = tl.hour_of(f"2025-{month + 1:02d}-01") if month < 12 else tl.n_hours
+        end = tl.hour_of(f"2025-{month + 1:02d}-01") if month < 8 else tl.n_hours
         ftr = np.flatnonzero(dep.t < start)
         fte = np.flatnonzero((dep.t >= start) & (dep.t < end))
         sample = rng.choice(ftr, size=min(BACKTEST_SAMPLE, ftr.size), replace=False)
@@ -592,7 +597,7 @@ def main() -> None:
 
     # example week at the busiest test station
     busiest = dep_frame.groupby("station")["y"].sum().idxmax()
-    ws = pd.Timestamp("2025-12-01")
+    ws = pd.Timestamp("2025-07-07")
     ex = dep_frame[(dep_frame["station"] == busiest) & (dep_frame["hour_start"] >= ws)
                    & (dep_frame["hour_start"] < ws + pd.Timedelta(days=7))]
     example = {"station": str(busiest), "week_start": ws.strftime("%Y-%m-%d"),
@@ -619,8 +624,8 @@ def main() -> None:
     out = {
         "split": {"headline_train": f"{tl.t0:%Y-%m-%d} to {H['valid_end']}",
                   "validation": f"{H['train_end']} to {H['valid_end']}",
-                  "test": f"{H['test_start']} to {tl.t0 + pd.Timedelta(hours=tl.n_hours):%Y-%m-%d}",
-                  "benchmark_train": f"2024-01-08 to {B['valid_end']}", "benchmark_test": f"{B['test_start']} onwards"},
+                  "test": f"{H['test_start']} to {WEATHER_END}",
+                  "benchmark_train": "2024-01-08 to 2024-12-31", "benchmark_test": f"{B['test_start']} to {WEATHER_END}"},
         "stations": int(len(np.unique(dep.s[fH.te]))),
         "chosen": chosen_label,
         "features": [FEATURE_LABELS[f] for f in feats],

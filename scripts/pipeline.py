@@ -234,11 +234,18 @@ def load_weather_hourly(year: str) -> pd.DataFrame:
     Uses the routine hourly reports (FM-15) only. An observation at hh:51
     is assigned to hour hh. Gaps are filled by interpolation (temp/wind) or 0 (precip).
     """
-    raw = _noaa_csv(f"noaa_lcd_{year}.csv", {
-        "dataset": "local-climatological-data", "stations": CENTRAL_PARK_LCD,
-        "startDate": f"{year}-01-01", "endDate": f"{year}-12-31",
-        "dataTypes": "HourlyDryBulbTemperature,HourlyPrecipitation,HourlyWindSpeed",
-    })
+    # One request per month: a full-year request came back truncated for 2025
+    # (only 237 of 365 days), which interpolation then filled with invented weather.
+    parts = []
+    for m in range(1, 13):
+        start = pd.Timestamp(f"{year}-{m:02d}-01")
+        end = start + pd.offsets.MonthBegin(1) - pd.Timedelta(days=1)
+        parts.append(_noaa_csv(f"noaa_lcd_{year}{m:02d}.csv", {
+            "dataset": "local-climatological-data", "stations": CENTRAL_PARK_LCD,
+            "startDate": start.strftime("%Y-%m-%d"), "endDate": end.strftime("%Y-%m-%d"),
+            "dataTypes": "HourlyDryBulbTemperature,HourlyPrecipitation,HourlyWindSpeed",
+        }))
+    raw = pd.concat(parts, ignore_index=True)
     raw = raw[raw["REPORT_TYPE"].astype(str).str.strip() == "FM-15"]
     df = pd.DataFrame({
         "hour_start": pd.to_datetime(raw["DATE"]).dt.floor("h"),
@@ -246,11 +253,19 @@ def load_weather_hourly(year: str) -> pd.DataFrame:
         "precip_mm": _noaa_number(raw["HourlyPrecipitation"]),
         "wind_ms": _noaa_number(raw["HourlyWindSpeed"]),
     }).groupby("hour_start").mean()
+    # check completeness across the span the feed covers (it can end mid-year)
+    span = pd.date_range(df.index.min(), df.index.max(), freq="h")
+    observed = df["temp_c"].reindex(span).notna().mean()
+    if observed < 0.9:  # a truncated download is ~60%; the real feed gaps are ~3%
+        raise ValueError(f"NOAA hourly weather for {year} is only {observed:.1%} complete; "
+                         f"delete .cache/noaa_lcd_{year}*.csv and retry")
     hours = pd.date_range(f"{year}-01-01", f"{int(year) + 1}-01-01", freq="h", inclusive="left")
     df = df.reindex(hours)
-    df["temp_c"] = df["temp_c"].interpolate(limit_direction="both")
-    df["wind_ms"] = df["wind_ms"].interpolate(limit_direction="both")
-    df["precip_mm"] = df["precip_mm"].fillna(0.0)
+    # bridge short gaps only; a long gap must not be invented
+    df["temp_c"] = df["temp_c"].interpolate(limit=24, limit_direction="both")
+    df["wind_ms"] = df["wind_ms"].interpolate(limit=24, limit_direction="both")
+    # no rain is recorded as zero, but only inside the span the feed covers
+    df["precip_mm"] = df["precip_mm"].where(df.index > df.index.max(), df["precip_mm"].fillna(0.0))
     df.index.name = "hour_start"
     return df.reset_index()
 
