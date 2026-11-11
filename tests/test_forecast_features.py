@@ -1,14 +1,14 @@
-"""Leak tests for the forecast's inputs: nothing may use data from the day being forecast."""
+"""Leak tests for the forecast inputs: nothing may use data from the day being forecast."""
 
 import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+from scipy.sparse import csr_matrix
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import build_forecast  # noqa: E402
+import build_forecast as bf  # noqa: E402
 
 N_STATIONS, N_DAYS = 6, 60
 
@@ -17,57 +17,63 @@ def counts(seed=0):
     return np.random.default_rng(seed).poisson(5, size=(N_STATIONS, N_DAYS * 24)).astype(np.float32)
 
 
+def neighbours(seed=1):
+    rng = np.random.default_rng(seed)
+    dense = (rng.random((N_STATIONS, N_STATIONS)) < 0.5).astype(float)
+    np.fill_diagonal(dense, 0)
+    dense /= np.maximum(dense.sum(axis=1, keepdims=True), 1)
+    return csr_matrix(dense)
+
+
 def same(a, b):
     return np.array_equal(a, b, equal_nan=True)
 
 
 def test_history_inputs_never_see_the_day_they_forecast():
-    y = counts()
-    base = build_forecast.history_features(y)
+    y, nbr = counts(), neighbours()
+    base = bf.history_features(y, nbr)
     for day in (30, 45, N_DAYS - 1):
         start = day * 24
         changed = y.copy()
         changed[:, start:] += 100  # rewrite everything from this day on
-        new = build_forecast.history_features(changed)
+        new = bf.history_features(changed, nbr)
         for name in base:
-            # inputs for this day (and every earlier one) must not move
             assert same(base[name][:, : start + 24], new[name][:, : start + 24]), f"{name} leaks day {day}"
 
 
 def test_history_inputs_do_use_the_previous_day():
-    # guards against the leak test passing only because an input is constant
-    y = counts()
-    base = build_forecast.history_features(y)
+    # guards against the leak test passing only because an input never changes
+    y, nbr = counts(), neighbours()
+    base = bf.history_features(y, nbr)
     changed = y.copy()
     changed[:, 30 * 24: 31 * 24] += 100  # rewrite day 30 only
-    new = build_forecast.history_features(changed)
+    new = bf.history_features(changed, nbr)
     day31 = slice(31 * 24, 32 * 24)
-    for name in ("lag_24", "same_hour_7d_mean", "day_total_yesterday", "day_total_7d_mean", "system_ratio_yesterday"):
+    for name in ("lag_24", "same_hour_7d_mean", "day_total_yesterday", "day_total_7d_mean",
+                 "system_ratio_yesterday", "neighbor_lag_24"):
         assert not same(base[name][:, day31], new[name][:, day31]), f"{name} ignores yesterday"
 
 
 def test_every_history_input_is_covered():
-    history = set(build_forecast.history_features(counts()))
-    not_history = {"hour", "dow", "is_holiday", "station_profile", *build_forecast.WEATHER}
-    assert history | not_history == set(build_forecast.FEATURES)
-
-
-def grid_for_profile(y):
-    hours = pd.date_range("2024-01-01", periods=y.shape[1], freq="h")
-    s_idx, h_idx = np.nonzero(np.ones_like(y, dtype=bool))
-    ts = hours[h_idx]
-    return pd.DataFrame({
-        "station": pd.Categorical.from_codes(s_idx, categories=[f"s{i}" for i in range(y.shape[0])]),
-        "hour_start": ts, "y": y.ravel(), "hour": ts.hour, "dow": ts.dayofweek,
-        "same_hour_7d_mean": np.zeros(y.size, dtype=np.float32),
-    })
+    history = set(bf.history_features(counts(), neighbours()))
+    assert history == set(bf.HISTORY)
+    assert set(bf.HISTORY) | set(bf.CALENDAR) | set(bf.WEATHER) | {"station_profile"} == set(bf.ALL)
 
 
 def test_station_profile_uses_training_period_only():
-    y = counts()
-    train_end = "2024-02-10"  # day 40
+    rng = np.random.default_rng(3)
+    n_hours = N_DAYS * 24
+    s = np.repeat(np.arange(N_STATIONS), n_hours).astype(np.int32)
+    t = np.tile(np.arange(n_hours), N_STATIONS).astype(np.int32)
+    y = rng.poisson(4, size=s.size).astype(np.float32)
+    hourly = {"hour": (t % 24).astype(np.float32), "dow": ((t // 24) % 7).astype(np.float32)}
+    hist = {"same_hour_7d_mean": np.zeros(s.size, np.float32)}
+    cut = 40 * 24
+
+    def profile(yy):
+        p = bf.Panel(s=s, t=t, y=yy, hist=hist)
+        return bf.station_profile(p, N_STATIONS, hourly, cut)
+
     changed = y.copy()
-    changed[:, 40 * 24:] += 100  # rewrite everything after the training period
-    base = build_forecast.station_profile(grid_for_profile(y), train_end)
-    new = build_forecast.station_profile(grid_for_profile(changed), train_end)
-    assert same(base, new)
+    changed[t >= cut] += 100  # rewrite everything after the training cut
+    assert same(profile(y), profile(changed))

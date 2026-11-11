@@ -1,73 +1,72 @@
 """
-Forecast hourly departures and arrivals for every station, one day ahead, and
-write docs/data/forecast.{json,js}.
+Forecast hourly departures and arrivals for every station, one day ahead.
 
-Use case: at the end of each day, predict tomorrow's trips per station and
-hour so rebalancing crews know where bikes will be needed. Every input is
-known a day ahead:
+Data: every Citi Bike trip in 2024 and 2025 on one hourly timeline. Each
+station gets a row per hour (from its first trip, after a one-week warm-up).
 
+Inputs, all known a day ahead:
   calendar  hour, day of week, federal holiday
-  weather   temperature, wind, rain that hour, rain over the past 3 hours,
-            rain for the day (observed; production would use the forecast,
-            so results are an upper bound on what weather adds)
-  history   same hour yesterday / last week, same hour's 7-day mean, same
-            weekday-hour's 4-week mean, yesterday's station total, station's
-            7-day mean daily total, yesterday's system-wide demand relative
-            to the week before, station's training-period profile
+  weather   temperature, wind, rain this hour / past 3 hours / whole day
+            (observed; a live system would use the forecast, see below)
+  history   same hour yesterday and last week, same hour's 7-day mean, same
+            weekday-hour's 4-week mean, yesterday's station total, its 7-day
+            mean, yesterday's system-wide demand vs. the week before, and
+            yesterday's demand at the 5 nearest stations
+  station   training-period profile (hour x weekday/weekend mean)
 
-No day-of-year or month input: with a date split the test dates are values
-the trees never saw, and validation error rose with it.
+No day-of-year or month input: under a date split the test dates are values
+the trees never saw, and validation error rose with them.
 
-Evaluation, all by date:
-  split      train Jan 8-Aug, validate Sep-Oct, refit Jan 8-Oct, test Nov-Dec
-  tuning     small sweep on the validation months (TUNING), then trees are
-             added until 50 more improve validation MAE by < 0.05%
-  baselines  same hour's 7-day mean (strongest, and the model's top input),
-             yesterday, last week, station profile
-  levels     accuracy (1 - WMAPE) at station-hour, station-day, borough-hour,
-             system-hour and system-day, next to a chance ceiling: the accuracy
-             a perfect forecast of the *expected* count would get if trips
-             were Poisson around it (real demand is noisier, so the true
-             ceiling is lower)
-  weather    the departures model is retrained with every weather input
-             replaced by the previous day's value at the same hour: a crude
-             "forecast" anyone has a day ahead. Real forecasts beat that, so
-             true day-ahead accuracy lies between this and the observed-
-             weather result
-  decision   weekday 7-10am net flow per station, and precision@20 for each
-             morning's biggest losers
-  intervals  shortest interval covering 80% of validation outcomes, per bin
-             of predicted level (split conformal)
-  backtest   rolling origin, one fold per month Aug-Dec
+Protocols, all by date:
+  headline   train before 2025-09-01, early-stop on Sep-Oct 2025, refit
+             before 2025-11-01, test Nov-Dec 2025. Unseen data from a later
+             year than most of the training data.
+  benchmark  the same model trained on 2024 only (before 2024-11-01,
+             early-stopped on Sep-Oct 2024), scored on the same 2025 test
+             months. The difference is what the extra data is worth.
+  weather    the headline model retrained with each weather input replaced
+             by yesterday's value: a crude stand-in for a weather forecast.
+             Real forecasts fall between this and the headline result.
+
+Settings are chosen on the headline validation months (TUNING), trees are
+added until 50 more improve validation MAE by < 0.05%, and every reported
+number comes from the test months.
 
 Model: HistGradientBoostingRegressor, Poisson loss.
 FORECAST_SMOKE_STATIONS=40 runs end to end on 40 stations and writes to .cache/.
 
-Usage: python scripts/build_forecast.py [YYYY]   # defaults to 2024
+Usage: python scripts/build_forecast.py
 """
 
 import json
 import os
-import sys
 import warnings
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 from pandas.tseries.holiday import USFederalHolidayCalendar
+from scipy.sparse import csr_matrix
+from scipy.spatial import cKDTree
 from scipy.stats import poisson
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 
-from pipeline import DEFAULT_PERIOD, REPO, load_clean_period, load_weather_hourly
+from pipeline import REPO, load_clean_period, load_weather_hourly, period_months
 
-BASE_FEATURES = [
-    "hour", "dow", "is_holiday", "temp_c", "precip_mm", "wind_ms",
-    "lag_24", "lag_168", "same_hour_7d_mean", "station_profile",
-]
-FEATURES = BASE_FEATURES + [
-    "precip_3h", "precip_day", "same_dow_4w_mean",
-    "day_total_yesterday", "day_total_7d_mean", "system_ratio_yesterday",
-]
+YEARS = [2024, 2025]
+HEADLINE = {"train_end": "2025-09-01", "valid_end": "2025-11-01", "test_start": "2025-11-01"}
+BENCHMARK = {"train_end": "2024-09-01", "valid_end": "2024-11-01", "test_start": "2025-11-01"}
+TRIP_COLS = ["started_at", "ended_at", "start_station_name", "end_station_name",
+             "start_lat", "start_lng", "end_lat", "end_lng"]
+
+WEATHER = ["temp_c", "precip_mm", "wind_ms", "precip_3h", "precip_day"]
+CALENDAR = ["hour", "dow", "is_holiday"]
+HISTORY = ["lag_24", "lag_168", "same_hour_7d_mean", "same_dow_4w_mean", "day_total_yesterday",
+           "day_total_7d_mean", "system_ratio_yesterday", "neighbor_lag_24"]
+PREV = CALENDAR + ["temp_c", "precip_mm", "wind_ms", "lag_24", "lag_168", "same_hour_7d_mean", "station_profile"]
+ALL = CALENDAR + WEATHER + HISTORY + ["station_profile"]
+ALL_NO_NEIGHBOURS = [f for f in ALL if f != "neighbor_lag_24"]
 FEATURE_LABELS = {
     "hour": "Hour of day", "dow": "Day of week", "is_holiday": "Holiday",
     "temp_c": "Temperature", "precip_mm": "Rain this hour", "wind_ms": "Wind speed",
@@ -76,37 +75,158 @@ FEATURE_LABELS = {
     "same_hour_7d_mean": "Same hour, 7-day mean", "same_dow_4w_mean": "Same weekday-hour, 4-week mean",
     "day_total_yesterday": "Station total yesterday", "day_total_7d_mean": "Station daily total, 7-day mean",
     "system_ratio_yesterday": "System demand yesterday vs. prior week",
+    "neighbor_lag_24": "Five nearest stations, same hour yesterday",
     "station_profile": "Station's usual level",
 }
-BASELINES = {
-    "seven_day_mean": "same_hour_7d_mean",
-    "seasonal_naive": "lag_168",
-    "yesterday": "lag_24",
-    "station_profile": "station_profile",
-}
+BASELINES = {"seven_day_mean": "same_hour_7d_mean", "seasonal_naive": "lag_168",
+             "yesterday": "lag_24", "station_profile": "station_profile"}
 BASE_PARAMS = dict(loss="poisson", learning_rate=0.1, max_leaf_nodes=63, min_samples_leaf=200,
                    l2_regularization=1.0, early_stopping=False, random_state=42)
-# sweep on the validation months: (label, features, parameter overrides)
 TUNING = [
-    ("previous inputs, 63 leaves", BASE_FEATURES, {}),
-    ("all inputs, 63 leaves", FEATURES, {}),
-    ("all inputs, 127 leaves", FEATURES, {"max_leaf_nodes": 127}),
-    ("all inputs, 255 leaves", FEATURES, {"max_leaf_nodes": 255}),
-    ("all inputs, 127 leaves, min leaf 50", FEATURES, {"max_leaf_nodes": 127, "min_samples_leaf": 50}),
-    ("all inputs, 127 leaves, min leaf 1000", FEATURES, {"max_leaf_nodes": 127, "min_samples_leaf": 1000}),
+    ("previous 10 inputs, 63 leaves", PREV, {}),
+    ("all inputs, 127 leaves, min leaf 1000", ALL, {"max_leaf_nodes": 127, "min_samples_leaf": 1000}),
+    ("all inputs but neighbours, 127 leaves, min leaf 1000", ALL_NO_NEIGHBOURS, {"max_leaf_nodes": 127, "min_samples_leaf": 1000}),
+    ("all inputs, 255 leaves, min leaf 1000", ALL, {"max_leaf_nodes": 255, "min_samples_leaf": 1000}),
+    ("all inputs, 127 leaves, min leaf 50", ALL, {"max_leaf_nodes": 127, "min_samples_leaf": 50}),
 ]
 TUNING_TREES, TUNING_TRAIN, TUNING_VALID = 200, 3_000_000, 1_000_000
 MAX_TREES, TREE_STEP, MIN_GAIN = 2000, 50, 0.0005
 AM = (7, 10)
 TOP_K = 20
 BACKTEST_SAMPLE, BACKTEST_TREES = 5_000_000, 200
-WEATHER = ["temp_c", "precip_mm", "wind_ms", "precip_3h", "precip_day"]
+NEIGHBOURS = 5
 SMOKE = os.environ.get("FORECAST_SMOKE_STATIONS")
 
 
-def params_for(features: list, overrides: dict) -> dict:
-    return {**BASE_PARAMS, **overrides, "categorical_features": [features.index("dow")]}
+# ---------------------------------------------------------------- timeline
 
+@dataclass
+class Timeline:
+    t0: pd.Timestamp
+    n_hours: int
+    names: np.ndarray        # station names, index = station id
+    lat: np.ndarray
+    lng: np.ndarray
+    counts: dict             # kind -> stations x hours float32 trip counts
+    hourly: dict             # per-hour arrays: calendar and weather, plus "<weather>_prev"
+
+    def hour_of(self, ts: str) -> int:
+        return int((pd.Timestamp(ts) - self.t0) / pd.Timedelta(hours=1))
+
+    def stamp(self, t) -> pd.DatetimeIndex:
+        return self.t0 + pd.to_timedelta(np.asarray(t), unit="h")
+
+
+def read_timeline(years, smoke=None) -> Timeline:
+    """Trip counts and station coordinates for all years, read one month at a time."""
+    t0 = pd.Timestamp(f"{years[0]}-01-01")
+    t1 = pd.Timestamp(f"{years[-1] + 1}-01-01")
+    n_hours = int((t1 - t0) / pd.Timedelta(hours=1))
+    idx_of, names = {}, []
+    start_xy, end_xy = {}, {}
+    keys = {"departures": [], "arrivals": []}
+    cnts = {"departures": [], "arrivals": []}
+
+    def index(vals):
+        uniq, inv = np.unique(vals, return_inverse=True)
+        out = np.empty(len(uniq), np.int64)
+        for i, u in enumerate(uniq):
+            j = idx_of.get(u)
+            if j is None:
+                j = idx_of[u] = len(names)
+                names.append(u)
+            out[i] = j
+        return out[inv]
+
+    def add_coords(store, vals, lat, lng):
+        g = pd.DataFrame({"n": vals, "la": lat, "ln": lng}).groupby("n").agg(
+            la=("la", "sum"), ln=("ln", "sum"), c=("la", "size"))
+        for n, r in g.iterrows():
+            acc = store.setdefault(n, [0.0, 0.0, 0])
+            acc[0] += r.la
+            acc[1] += r.ln
+            acc[2] += r.c
+
+    for year in years:
+        for m in period_months(str(year)):
+            df = load_clean_period(m, columns=TRIP_COLS)
+            for kind, tc, sc, la, ln, store in [
+                ("departures", "started_at", "start_station_name", "start_lat", "start_lng", start_xy),
+                ("arrivals", "ended_at", "end_station_name", "end_lat", "end_lng", end_xy),
+            ]:
+                vals = df[sc].astype(str).to_numpy()
+                h = ((df[tc] - t0) // pd.Timedelta(hours=1)).to_numpy()
+                ok = (h >= 0) & (h < n_hours)
+                k = index(vals[ok]) * n_hours + h[ok]
+                u, c = np.unique(k, return_counts=True)
+                keys[kind].append(u)
+                cnts[kind].append(c)
+                add_coords(store, vals, df[la].to_numpy(), df[ln].to_numpy())
+            del df
+
+    n_st = len(names)
+    counts = {}
+    for kind in keys:
+        k, c = np.concatenate(keys[kind]), np.concatenate(cnts[kind])
+        counts[kind] = np.bincount(k, weights=c, minlength=n_st * n_hours).reshape(n_st, n_hours).astype(np.float32)
+    names = np.array(names)
+
+    lat, lng = np.zeros(n_st), np.zeros(n_st)
+    for i, n in enumerate(names):
+        acc = start_xy.get(n) or end_xy.get(n)
+        lat[i], lng[i] = acc[0] / acc[2], acc[1] / acc[2]
+
+    if smoke:  # keep the busiest stations only, for a quick end-to-end run
+        keep = np.argsort(counts["departures"].sum(axis=1))[-int(smoke):]
+        counts = {k: v[keep] for k, v in counts.items()}
+        names, lat, lng = names[keep], lat[keep], lng[keep]
+        print(f"smoke test: {len(keep)} stations", flush=True)
+
+    tl = Timeline(t0=t0, n_hours=n_hours, names=names, lat=lat, lng=lng, counts=counts, hourly={})
+    tl.hourly = hourly_arrays(tl, years)
+    print(f"timeline {t0:%Y-%m-%d} .. {t1:%Y-%m-%d}: {len(names):,} stations, "
+          f"{counts['departures'].sum():,.0f} departures", flush=True)
+    return tl
+
+
+def hourly_arrays(tl: Timeline, years) -> dict:
+    """Calendar and weather values for every hour of the timeline."""
+    hours = np.arange(tl.n_hours)
+    days = hours // 24
+    day_dates = pd.date_range(tl.t0, periods=tl.n_hours // 24, freq="D")
+    t1 = day_dates[-1] + pd.Timedelta(days=1)
+    holidays = USFederalHolidayCalendar().holidays(tl.t0, t1)
+    dow_day = day_dates.dayofweek.to_numpy()
+    hol_day = day_dates.isin(holidays).astype(np.float32)
+    out = {"hour": (hours % 24).astype(np.float32), "dow": dow_day[days].astype(np.float32),
+           "is_holiday": hol_day[days]}
+
+    w = pd.concat([load_weather_hourly(str(y)) for y in years]).set_index("hour_start")
+    w = w[~w.index.duplicated()].reindex(pd.date_range(tl.t0, periods=tl.n_hours, freq="h"))
+    w = w.interpolate(limit_direction="both")
+    w["precip_mm"] = w["precip_mm"].fillna(0.0)
+    w["precip_3h"] = w["precip_mm"].rolling(3, min_periods=1).sum()
+    w["precip_day"] = pd.Series(w["precip_mm"].to_numpy()).groupby(days).transform("sum").to_numpy()
+    for col in WEATHER:
+        arr = w[col].to_numpy(dtype=np.float32)
+        out[col] = arr
+        out[col + "_prev"] = np.concatenate([arr[:24], arr[:-24]])  # yesterday's value at the same hour
+    return out
+
+
+def neighbour_matrix(lat, lng, k=NEIGHBOURS) -> csr_matrix:
+    """Row i averages the k nearest other stations (projected km), weight 1/k each."""
+    x = lng * np.cos(np.radians(40.75)) * 111.0
+    pts = np.column_stack([x, lat * 111.0])
+    n = len(pts)
+    k = min(k, n - 1)
+    _, nn = cKDTree(pts).query(pts, k=k + 1)
+    rows = np.repeat(np.arange(n), k)
+    cols = nn[:, 1:].ravel()
+    return csr_matrix((np.full(rows.size, 1.0 / k), (rows, cols)), shape=(n, n))
+
+
+# ---------------------------------------------------------------- features
 
 def _lag(a: np.ndarray, k: int) -> np.ndarray:
     out = np.full_like(a, np.nan)
@@ -114,7 +234,7 @@ def _lag(a: np.ndarray, k: int) -> np.ndarray:
     return out
 
 
-def history_features(y: np.ndarray) -> dict:
+def history_features(y: np.ndarray, nbr=None) -> dict:
     """History inputs from a stations x hours count matrix (hours must be whole days).
 
     Invariant, enforced by tests/test_forecast_features.py: every value for a
@@ -128,80 +248,72 @@ def history_features(y: np.ndarray) -> dict:
         warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN before the warm-up
         feats["same_dow_4w_mean"] = np.nanmean(np.stack([_lag(y, 168 * k) for k in range(1, 5)]), axis=0)
 
-    daily = y.reshape(n_st, n_hours // 24, 24).sum(axis=2)  # station x day totals
-    per_hour = lambda d: np.repeat(d, 24, axis=1)           # noqa: E731
+    daily = y.reshape(n_st, n_hours // 24, 24).sum(axis=2)
+    per_hour = lambda d: np.repeat(d, 24, axis=1)  # noqa: E731
     feats["day_total_yesterday"] = per_hour(_lag(daily, 1))
     feats["day_total_7d_mean"] = per_hour(sum(_lag(daily, k) for k in range(1, 8)) / 7)
     system = daily.sum(axis=0, keepdims=True)
     ratio = _lag(system, 1) / (sum(_lag(system, k) for k in range(2, 9)) / 7)
     feats["system_ratio_yesterday"] = np.broadcast_to(per_hour(ratio), y.shape)
+    if nbr is not None:
+        feats["neighbor_lag_24"] = nbr @ np.nan_to_num(feats["lag_24"])
     return feats
 
 
-def station_hour_grid(year: str, kind: str) -> pd.DataFrame:
-    """One row per station-hour from each station's first trip on (after a
-    one-week warm-up): the trip count `y` and every history feature."""
-    tcol, scol = ("started_at", "start_station_name") if kind == "departures" else ("ended_at", "end_station_name")
-    df = load_clean_period(year, columns=[tcol, scol])
-    hours = pd.date_range(f"{year}-01-01", f"{int(year) + 1}-01-01", freq="h", inclusive="left")
-    n_hours = len(hours)
-    h = ((df[tcol] - hours[0]) // pd.Timedelta(hours=1)).to_numpy()
-    keep = (h >= 0) & (h < n_hours)  # arrivals can spill into next January
-    names = df[scol].cat.categories.astype(str)
-    codes = df[scol].cat.codes.to_numpy()[keep].astype(np.int64)
-    y = np.bincount(codes * n_hours + h[keep], minlength=len(names) * n_hours).reshape(len(names), n_hours).astype(np.float32)
-    del df
-
-    used = y.sum(axis=1) > 0
-    if SMOKE:  # quick end-to-end test on a few busy stations
-        used &= y.sum(axis=1) >= np.sort(y.sum(axis=1))[-int(SMOKE)]
-    y, names = y[used], names[used]
-    n_st = len(names)
-    print(f"{kind}: {n_st:,} stations x {n_hours:,} hours", flush=True)
-
-    feats = history_features(y)
-
-    first = (y > 0).argmax(axis=1)
-    mask = np.arange(n_hours)[None, :] >= np.maximum(first, 168)[:, None]
-    s_idx, h_idx = np.nonzero(mask)
-    grid = pd.DataFrame({
-        "station": pd.Categorical.from_codes(s_idx, categories=names),
-        "hour_start": hours[h_idx],
-        "y": y[mask],
-        **{k: v[mask].astype(np.float32) for k, v in feats.items()},
-    })
-    return grid
+@dataclass
+class Panel:
+    """One row per station-hour that has a full history, for one kind of trip."""
+    s: np.ndarray       # station id
+    t: np.ndarray       # hour index on the timeline
+    y: np.ndarray       # trips in that hour
+    hist: dict          # history features, aligned with s and t
 
 
-def station_profile(grid: pd.DataFrame, train_end: str) -> np.ndarray:
-    """Station x hour x weekday/weekend mean of `y` over hours before `train_end` only."""
-    key = (grid["station"].cat.codes.to_numpy().astype(np.int64) * 48
-           + grid["hour"].to_numpy() * 2 + (grid["dow"].to_numpy() >= 5))
-    train = (grid["hour_start"] < train_end).to_numpy()
-    size = int(key.max()) + 1
-    total = np.bincount(key[train], weights=grid["y"].to_numpy()[train], minlength=size)
-    count = np.bincount(key[train], minlength=size)
+def build_panel(tl: Timeline, kind: str, nbr) -> Panel:
+    y = tl.counts[kind]
+    feats = history_features(y, nbr)
+    has = y.any(axis=1)
+    first = np.where(has, (y > 0).argmax(axis=1), tl.n_hours)
+    mask = (np.arange(tl.n_hours)[None, :] >= np.maximum(first, 168)[:, None]) & has[:, None]
+    s, t = np.nonzero(mask)
+    hist = {k: v[s, t].astype(np.float32) for k, v in feats.items()}
+    del feats, mask
+    print(f"{kind}: {len(s):,} station-hour rows", flush=True)
+    return Panel(s=s.astype(np.int32), t=t.astype(np.int32), y=y[s, t], hist=hist)
+
+
+def station_profile(p: Panel, n_st: int, hourly: dict, cut_t: int) -> np.ndarray:
+    """Station x hour x weekday/weekend mean of y over hours before `cut_t` only."""
+    weekend = (hourly["dow"][p.t] >= 5).astype(np.int64)
+    key = p.s.astype(np.int64) * 48 + hourly["hour"][p.t].astype(np.int64) * 2 + weekend
+    before = p.t < cut_t
+    total = np.bincount(key[before], weights=p.y[before], minlength=n_st * 48)
+    count = np.bincount(key[before], minlength=n_st * 48)
     with np.errstate(invalid="ignore", divide="ignore"):
-        out = (total / count)[key].astype(np.float32)
-    # stations that opened after the training window fall back to their recent mean
-    return np.where(np.isnan(out), grid["same_hour_7d_mean"].to_numpy(), out)
+        prof = (total / count)[key]
+    # stations that opened after the training period fall back to their recent mean
+    return np.where(np.isfinite(prof), prof, p.hist["same_hour_7d_mean"]).astype(np.float32)
 
 
-def add_features(grid: pd.DataFrame, year: str, train_end: str) -> pd.DataFrame:
-    ts = grid["hour_start"]
-    holidays = USFederalHolidayCalendar().holidays(f"{year}-01-01", f"{year}-12-31")
-    grid["hour"] = ts.dt.hour.astype(np.int8)
-    grid["dow"] = ts.dt.dayofweek.astype(np.int8)
-    grid["is_holiday"] = ts.dt.normalize().isin(holidays).astype(np.int8)
-    weather = load_weather_hourly(year).set_index("hour_start")
-    weather["precip_3h"] = weather["precip_mm"].rolling(3, min_periods=1).sum()
-    weather["precip_day"] = weather.groupby(weather.index.normalize())["precip_mm"].transform("sum")
-    for col in WEATHER:
-        grid[col] = ts.map(weather[col]).astype(np.float32)
-        grid[col + "_prev"] = (ts - pd.Timedelta(hours=24)).map(weather[col]).astype(np.float32)
-    grid["station_profile"] = station_profile(grid, train_end)
-    return grid
+def build_X(p: Panel, feats: list, profile: np.ndarray, hourly: dict, prev=False, rows=None) -> np.ndarray:
+    cols = []
+    idx = slice(None) if rows is None else rows
+    for f in feats:
+        if f == "station_profile":
+            cols.append(profile[idx])
+        elif f in hourly:
+            src = hourly[f + "_prev"] if (prev and f in WEATHER) else hourly[f]
+            cols.append(src[p.t[idx]])
+        else:
+            cols.append(p.hist[f][idx])
+    return np.column_stack(cols).astype(np.float32)
 
+
+def params_for(feats: list, overrides: dict) -> dict:
+    return {**BASE_PARAMS, **overrides, "categorical_features": [feats.index("dow")]}
+
+
+# ---------------------------------------------------------------- training
 
 def metrics(y: np.ndarray, pred: np.ndarray) -> dict:
     err = pred - y
@@ -212,27 +324,26 @@ def metrics(y: np.ndarray, pred: np.ndarray) -> dict:
     }
 
 
-def tune(grid: pd.DataFrame, y: np.ndarray, tr: np.ndarray, va: np.ndarray) -> list:
-    """Score each TUNING config on a fixed sample of the validation months."""
-    rng = np.random.default_rng(7)
+def tune(p: Panel, n_st: int, hourly: dict, cut: dict, rng) -> list:
+    """Score each TUNING config on a sample of the headline validation months."""
+    tr, va = p.t < cut["train_end"], (p.t >= cut["train_end"]) & (p.t < cut["valid_end"])
     itr = rng.choice(np.flatnonzero(tr), size=min(TUNING_TRAIN, int(tr.sum())), replace=False)
     iva = rng.choice(np.flatnonzero(va), size=min(TUNING_VALID, int(va.sum())), replace=False)
+    profile = station_profile(p, n_st, hourly, cut["train_end"])
     out = []
     for label, feats, overrides in TUNING:
-        X = grid[feats].to_numpy(dtype=np.float32)
+        X = build_X(p, feats, profile, hourly, rows=np.concatenate([itr, iva]))
         m = HistGradientBoostingRegressor(**params_for(feats, overrides), max_iter=TUNING_TREES)
-        m.fit(X[itr], y[itr])
-        mae = float(np.abs(m.predict(X[iva]) - y[iva]).mean())
+        m.fit(X[: len(itr)], p.y[itr])
+        mae = float(np.abs(m.predict(X[len(itr):]) - p.y[iva]).mean())
         out.append({"config": label, "valid_mae": round(mae, 4)})
-        print(f"  tuning  {label:40} valid MAE {mae:.4f}", flush=True)
+        print(f"  tuning  {label:55} valid MAE {mae:.4f}", flush=True)
     return out
 
 
 def fit_early_stopped(params: dict, Xtr, ytr, Xva, yva):
-    """Add trees in steps on the training months until a step improves
-    validation MAE by less than MIN_GAIN (sklearn's own early stopping uses a
-    random, not time-ordered, holdout). Returns (trees, history, validation
-    predictions of the train-only model)."""
+    """Add trees in steps on the training months until a step improves validation
+    MAE by less than MIN_GAIN. Returns (trees, history, validation predictions)."""
     model = HistGradientBoostingRegressor(**params, warm_start=True, max_iter=0)
     best_iter, best_mae, best_pred, history = 0, np.inf, None, []
     for n in range(TREE_STEP, MAX_TREES + 1, TREE_STEP):
@@ -250,15 +361,36 @@ def fit_early_stopped(params: dict, Xtr, ytr, Xva, yva):
     return best_iter, history, best_pred
 
 
-def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
-    """Per bin of predicted level, the shortest range of trip counts that
-    held at least `coverage` of the calibration outcomes.
+@dataclass
+class Fit:
+    model: object
+    trees: int
+    history: list
+    profile: np.ndarray
+    X: np.ndarray
+    pred_va: np.ndarray
+    pred_te: np.ndarray
+    tr: np.ndarray
+    va: np.ndarray
+    te: np.ndarray
 
-    Bins are quantiles of the calibration predictions, finer in the top 10%
-    (busy hours, where the spread changes fastest). Counts are whole numbers,
-    so quiet bins necessarily cover more than `coverage` (e.g. "0 or 1 trips"
-    may already hold 95%); the shortest range keeps that excess to a minimum.
-    """
+
+def fit_protocol(p: Panel, n_st: int, hourly: dict, feats: list, params: dict, cut: dict) -> Fit:
+    profile = station_profile(p, n_st, hourly, cut["train_end"])
+    X = build_X(p, feats, profile, hourly)
+    tr = p.t < cut["train_end"]
+    va = (p.t >= cut["train_end"]) & (p.t < cut["valid_end"])
+    fit = p.t < cut["valid_end"]
+    te = p.t >= cut["test_start"]
+    trees, history, pred_va = fit_early_stopped(params, X[tr], p.y[tr], X[va], p.y[va])
+    model = HistGradientBoostingRegressor(**params, max_iter=trees).fit(X[fit], p.y[fit])
+    return Fit(model, trees, history, profile, X, pred_va, model.predict(X[te]), tr, va, te)
+
+
+def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
+    """Per bin of predicted level, the shortest range of trip counts holding
+    `coverage` of calibration outcomes, interpolated between bin centres and
+    rounded outward to whole trips. Bins are finer in the busy top 10%."""
     levels = np.unique(np.concatenate([np.linspace(0, 0.9, 28), np.linspace(0.9, 0.99, 19), [0.995, 1.0]]))
     edges = np.unique(np.quantile(pred_cal, levels))
     n_bins = len(edges) - 1
@@ -272,18 +404,15 @@ def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
         need = coverage * cum[-1]
         best = (np.inf, 0, vals[0], vals[-1])
         for i in range(len(vals)):
-            j = np.searchsorted(cum, cum[i] + need, side="left") - 1  # smallest j with mass(i..j) >= need
+            j = np.searchsorted(cum, cum[i] + need, side="left") - 1
             if j >= len(vals):
                 break
             cand = (vals[j] - vals[i], -(cum[j + 1] - cum[i]), vals[i], vals[j])
             if cand[:2] < best[:2]:
                 best = cand
         lo_by_bin[b], hi_by_bin[b] = best[2], best[3]
-    # a higher forecast never gets a lower band, and the band is interpolated
-    # between bin centers so it doesn't jump when a forecast crosses a bin edge
     lo_by_bin, hi_by_bin = np.maximum.accumulate(lo_by_bin), np.maximum.accumulate(hi_by_bin)
     centers = np.array([np.median(pred_cal[cal_bin == b]) if (cal_bin == b).any() else edges[b] for b in range(n_bins)])
-    # trip counts are whole numbers, so round the band outward
     return np.floor(np.interp(pred_new, centers, lo_by_bin)), np.ceil(np.interp(pred_new, centers, hi_by_bin))
 
 
@@ -295,19 +424,29 @@ def interval_report(y, pred, lo, hi) -> dict:
                 "above": round(float((y > hi)[mask].mean()), 4), "below": round(float((y < lo)[mask].mean()), 4),
                 "mean_width": round(float((hi - lo)[mask].mean()), 2)}
 
-    return {
-        "nominal": 0.8,
-        "all": part(np.ones(len(y), bool)),
-        "quiet": part(pred < 1),            # under 1 trip expected
-        "medium": part((pred >= 1) & (pred < 5)),
-        "busy": part(pred >= 5),
-    }
+    return {"nominal": 0.8, "all": part(np.ones(len(y), bool)), "quiet": part(pred < 1),
+            "medium": part((pred >= 1) & (pred < 5)), "busy": part(pred >= 5)}
 
 
-def level_accuracy(test: pd.DataFrame) -> list:
-    """Accuracy (1 - WMAPE) of the same forecasts summed to each planning level."""
-    boro = {s["name"]: s["boro"] for s in json.loads((REPO / "docs" / "data" / "stations.json").read_text())["stations"]}
-    t = test.assign(boro=test["station"].astype(str).map(boro).fillna("Other"), day=test["hour_start"].dt.normalize())
+# ---------------------------------------------------------------- evaluation
+
+def test_frame(tl: Timeline, p: Panel, te: np.ndarray, pred: np.ndarray, profile: np.ndarray) -> pd.DataFrame:
+    return pd.DataFrame({
+        "station": tl.names[p.s[te]],
+        "hour_start": tl.stamp(p.t[te]),
+        "y": p.y[te].astype(np.float64),
+        "pred": pred.astype(np.float64),
+        "same_hour_7d_mean": p.hist["same_hour_7d_mean"][te],
+        "lag_168": p.hist["lag_168"][te],
+        "lag_24": p.hist["lag_24"][te],
+        "station_profile": profile[te],
+    })
+
+
+def level_accuracy(f: pd.DataFrame, boro: dict) -> list:
+    """Accuracy (1 - WMAPE) of the same forecasts summed to each planning level,
+    next to a Poisson chance ceiling."""
+    t = f.assign(boro=f["station"].map(boro).fillna("Other"), day=f["hour_start"].dt.normalize())
     levels = [
         ("station_hour", "One station, one hour", ["station", "hour_start"]),
         ("station_day", "One station, one day", ["station", "day"]),
@@ -320,7 +459,6 @@ def level_accuracy(test: pd.DataFrame) -> list:
         g = t.groupby(by, observed=True)[["y", "pred", "same_hour_7d_mean"]].sum()
         acc = lambda col: round(float(1 - (g[col] - g["y"]).abs().sum() / g["y"].sum()), 4)  # noqa: E731
         lam = g["pred"].to_numpy(dtype=np.float64)
-        # mean absolute deviation of a Poisson(lam) count is 2 * lam * P(Y = floor(lam))
         noise = 2 * lam * poisson.pmf(np.floor(lam), lam)
         out.append({"level": key, "label": label, "avg_trips": round(float(g["y"].mean()), 1),
                     "model": acc("pred"), "seven_day_mean": acc("same_hour_7d_mean"),
@@ -328,128 +466,22 @@ def level_accuracy(test: pd.DataFrame) -> list:
     return out
 
 
-def run_target(year, kind, train_end, valid_end, shared):
-    grid = add_features(station_hour_grid(year, kind), year, train_end)
-    ts = grid["hour_start"]
-    tr = (ts < train_end).to_numpy()
-    va = ((ts >= train_end) & (ts < valid_end)).to_numpy()
-    te = (ts >= valid_end).to_numpy()
-    print(f"{kind} rows: train {tr.sum():,}  valid {va.sum():,}  test {te.sum():,}", flush=True)
-    y = grid["y"].to_numpy(dtype=np.float32)
-
-    if "params" not in shared:  # tune once, on departures; arrivals reuse the choice
-        shared["tuning"] = tune(grid, y, tr, va)
-        chosen = min((r for r in shared["tuning"][1:]), key=lambda r: r["valid_mae"])["config"]
-        shared["chosen"] = chosen
-        shared["params"] = params_for(FEATURES, next(o for label, _, o in TUNING if label == chosen))
-        print(f"  chosen: {chosen}", flush=True)
-    params = shared["params"]
-
-    X = grid[FEATURES].to_numpy(dtype=np.float32)
-    best_iter, history, pred_va = fit_early_stopped(params, X[tr], y[tr], X[va], y[va])
-    model = HistGradientBoostingRegressor(**params, max_iter=best_iter)
-    model.fit(X[tr | va], y[tr | va])  # refit on train + validation, then score the untouched test months
-
-    test = grid.loc[te, ["station", "hour_start", "hour", "y", *BASELINES.values()]].copy()
-    test["pred"] = model.predict(X[te])
-    yt = test["y"].to_numpy()
-
-    hourly = {"model": metrics(yt, test["pred"].to_numpy())}
-    hourly |= {name: metrics(yt, test[col].to_numpy()) for name, col in BASELINES.items()}
-    out = {"trees": best_iter, "hit_tree_cap": best_iter >= MAX_TREES, "early_stopping": history,
-           "rows": {"train": int(tr.sum()), "valid": int(va.sum()), "test": int(te.sum())},
-           "stations": int(grid["station"].nunique()), "test_mean": round(float(yt.mean()), 4),
-           "hourly": hourly, "levels": level_accuracy(test)}
-
-    if kind == "departures":  # same model, but it only knows yesterday's weather
-        Xp = grid[[f + "_prev" if f in WEATHER else f for f in FEATURES]].to_numpy(dtype=np.float32)
-        prev_model = HistGradientBoostingRegressor(**params, max_iter=best_iter).fit(Xp[tr | va], y[tr | va])
-        prev = test.assign(pred=prev_model.predict(Xp[te]))
-        mae = float(np.abs(prev["pred"].to_numpy() - yt).mean())
-        shared["yesterdays_weather"] = {
-            "hourly_mae": round(mae, 4),
-            "vs_seven_day_mean_hourly": round(1 - mae / hourly["seven_day_mean"]["mae"], 4),
-            "levels": {lv["level"]: lv["model"] for lv in level_accuracy(prev)},
-        }
-        print("  yesterday's weather:", shared["yesterdays_weather"], flush=True)
-        del Xp, prev_model
-    if not SMOKE:  # keep the test forecasts for follow-up analysis
-        test.to_parquet(REPO / ".cache" / f"forecast_test_{kind}_{year}.parquet", index=False)
-    if kind == "departures":
-        shared.update(departures_extras(year, grid, X, y, te, test, model, params, pred_va, y[va]))
-    return out, test[["station", "hour_start", "y", "pred", "same_hour_7d_mean"]]
+def hourly_block(f: pd.DataFrame) -> dict:
+    out = {"model": metrics(f["y"].to_numpy(), f["pred"].to_numpy())}
+    out |= {name: metrics(f["y"].to_numpy(), f[col].to_numpy()) for name, col in BASELINES.items()}
+    return out
 
 
-def departures_extras(year, grid, X, y, te, test, model, params, pred_va, y_va) -> dict:
-    rng = np.random.default_rng(42)
-    yt, pt = test["y"].to_numpy(), test["pred"].to_numpy()
-
-    lo, hi = conformal_band(pred_va, y_va, pt)
-    test = test.assign(lo=lo, hi=hi)
-
-    # example week at the busiest test station
-    busiest = test.groupby("station", observed=True)["y"].sum().idxmax()
-    start = pd.Timestamp(f"{year}-12-02")
-    ex = test[(test["station"] == busiest) & (test["hour_start"] >= start) & (test["hour_start"] < start + pd.Timedelta(days=7))]
-
-    sample = rng.choice(np.flatnonzero(te), size=min(300_000, int(te.sum())), replace=False)
-    perm = permutation_importance(model, X[sample], y[sample], scoring="neg_mean_absolute_error",
-                                  n_repeats=3, random_state=42, n_jobs=1)
-    importances = sorted(
-        ({"feature": f, "label": FEATURE_LABELS[f], "importance": round(float(m), 5)}
-         for f, m in zip(FEATURES, perm.importances_mean)),
-        key=lambda d: -d["importance"],
-    )
-
-    # rolling-origin backtest, one fold per month
-    backtest = []
-    ts = grid["hour_start"]
-    sp_col = FEATURES.index("station_profile")
-    for month in range(8, 13):
-        fold_start = pd.Timestamp(f"{year}-{month:02d}-01")
-        ftr = (ts < fold_start).to_numpy()
-        fte = ((ts >= fold_start) & (ts < fold_start + pd.offsets.MonthBegin(1))).to_numpy()
-        prof = station_profile(grid, str(fold_start.date()))
-        idx = rng.choice(np.flatnonzero(ftr), size=min(BACKTEST_SAMPLE, int(ftr.sum())), replace=False)
-        Xtr, Xte = X[idx].copy(), X[fte].copy()
-        Xtr[:, sp_col], Xte[:, sp_col] = prof[idx], prof[fte]
-        fm = HistGradientBoostingRegressor(**params, max_iter=BACKTEST_TREES).fit(Xtr, y[idx])
-        yf = y[fte]
-        fold = {
-            "month": month,
-            "model": round(float(np.abs(fm.predict(Xte) - yf).mean()), 4),
-            "seven_day_mean": round(float(np.abs(grid.loc[fte, "same_hour_7d_mean"].to_numpy() - yf).mean()), 4),
-            "seasonal_naive": round(float(np.abs(grid.loc[fte, "lag_168"].to_numpy() - yf).mean()), 4),
-        }
-        print("  backtest", fold, flush=True)
-        backtest.append(fold)
-
-    return {
-        "intervals": interval_report(yt, pt, lo, hi),
-        "example": {
-            "station": str(busiest), "week_start": start.strftime("%Y-%m-%d"),
-            "series": [
-                {"t": t.strftime("%Y-%m-%dT%H"), "actual": int(a), "pred": round(float(p), 2),
-                 "lo": round(float(lo_), 1), "hi": round(float(hi_), 1), "naive": int(n)}
-                for t, a, p, lo_, hi_, n in zip(ex["hour_start"], ex["y"], ex["pred"], ex["lo"], ex["hi"], ex["lag_168"])
-            ],
-        },
-        "feature_importances": importances,
-        "backtest": backtest,
-    }
-
-
-def net_flow_eval(dep: pd.DataFrame, arr: pd.DataFrame) -> dict:
-    """Weekday 7-10am net flow per station-day: forecast vs. the 7-day-mean rule."""
+def net_flow_eval(dep: pd.DataFrame, arr: pd.DataFrame, holidays) -> dict:
+    """Weekday 7-10am net flow per station-day, and how many of each morning's
+    biggest losers each rule flags."""
     cols = ["y", "pred", "same_hour_7d_mean"]
     keys = ["station", "hour_start"]
-    dep, arr = (d.assign(station=d["station"].astype(str)) for d in (dep, arr))
-    m = dep.merge(arr[keys + cols], on=keys, how="outer", suffixes=("_dep", "_arr"))
+    m = dep[keys + cols].merge(arr[keys + cols], on=keys, how="outer", suffixes=("_dep", "_arr"))
     for c in cols:
         for k in ("dep", "arr"):
             m[f"{c}_{k}"] = m[f"{c}_{k}"].fillna(0)
     h = m["hour_start"].dt.hour
-    holidays = USFederalHolidayCalendar().holidays(m["hour_start"].min(), m["hour_start"].max())
     weekday = (m["hour_start"].dt.dayofweek < 5) & ~m["hour_start"].dt.normalize().isin(holidays)
     m = m[weekday & (h >= AM[0]) & (h < AM[1])]
     day = m["hour_start"].dt.normalize().rename("day")
@@ -474,44 +506,154 @@ def net_flow_eval(dep: pd.DataFrame, arr: pd.DataFrame) -> dict:
     }
 
 
+def boroughs(tl: Timeline) -> dict:
+    """Borough per station, by point-in-polygon against NYC's borough boundaries."""
+    from build_geomap import assign_boroughs
+    stations = [{"name": str(n), "lat": float(la), "lng": float(ln)} for n, la, ln in zip(tl.names, tl.lat, tl.lng)]
+    assign_boroughs(stations)
+    return {s["name"]: s["boro"] for s in stations}
+
+
+# ---------------------------------------------------------------- main
+
 def main() -> None:
-    year = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PERIOD
-    train_end, valid_end = f"{year}-09-01", f"{year}-11-01"
+    tl = read_timeline(YEARS, SMOKE)
+    n_st = len(tl.names)
+    nbr = neighbour_matrix(tl.lat, tl.lng)
+    rng = np.random.default_rng(42)
+    H, B = HEADLINE, BENCHMARK
+    cut_H = {k: tl.hour_of(v) for k, v in H.items()}
+    cut_B = {k: tl.hour_of(v) for k, v in B.items()}
+    hourly = tl.hourly
 
-    shared = {}
-    dep, dep_test = run_target(year, "departures", train_end, valid_end, shared)
-    arr, arr_test = run_target(year, "arrivals", train_end, valid_end, shared)
-    shared.pop("params")
+    # ---- departures: tune, fit the headline and the benchmark, weather test, backtest
+    dep = build_panel(tl, "departures", nbr)
+    tuning = tune(dep, n_st, hourly, cut_H, rng)
+    chosen_label = min(tuning, key=lambda r: r["valid_mae"])["config"]
+    feats, overrides = next((f, o) for lbl, f, o in TUNING if lbl == chosen_label)
+    params = params_for(feats, overrides)
+    print(f"chosen: {chosen_label}", flush=True)
 
-    def gain(target, base):
-        return round(1 - target["hourly"]["model"]["mae"] / target["hourly"][base]["mae"], 4)
+    fH = fit_protocol(dep, n_st, hourly, feats, params, cut_H)
+    print(f"headline departures: {fH.trees} trees", flush=True)
+    dep_frame = test_frame(tl, dep, fH.te, fH.pred_te, fH.profile)
+    y_te = dep_frame["y"].to_numpy()
 
+    fB = fit_protocol(dep, n_st, hourly, feats, params, cut_B)
+    print(f"benchmark (2024 only) departures: {fB.trees} trees", flush=True)
+    bench_pred = fB.pred_te
+
+    # weather test: retrain with yesterday's weather in place of the day's
+    X_prev = build_X(dep, feats, fH.profile, hourly, prev=True)
+    fit_rows = dep.t < cut_H["valid_end"]
+    prev_model = HistGradientBoostingRegressor(**params, max_iter=fH.trees).fit(X_prev[fit_rows], dep.y[fit_rows])
+    prev_pred = prev_model.predict(X_prev[fH.te])
+    del X_prev, prev_model, fit_rows
+    fB.X = fH.X = None  # free the training matrices before the arrivals pass
+
+    # rolling backtest, one fold per month of the test year
+    backtest = []
+    for month in range(8, 13):
+        start = tl.hour_of(f"2025-{month:02d}-01")
+        end = tl.hour_of(f"2025-{month + 1:02d}-01") if month < 12 else tl.n_hours
+        ftr = np.flatnonzero(dep.t < start)
+        fte = np.flatnonzero((dep.t >= start) & (dep.t < end))
+        sample = rng.choice(ftr, size=min(BACKTEST_SAMPLE, ftr.size), replace=False)
+        profile_f = station_profile(dep, n_st, hourly, start)
+        Xf = build_X(dep, feats, profile_f, hourly, rows=np.concatenate([sample, fte]))
+        fm = HistGradientBoostingRegressor(**params, max_iter=BACKTEST_TREES).fit(Xf[: len(sample)], dep.y[sample])
+        yf = dep.y[fte]
+        fold = {
+            "month": month,
+            "model": round(float(np.abs(fm.predict(Xf[len(sample):]) - yf).mean()), 4),
+            "seven_day_mean": round(float(np.abs(dep.hist["same_hour_7d_mean"][fte] - yf).mean()), 4),
+            "seasonal_naive": round(float(np.abs(dep.hist["lag_168"][fte] - yf).mean()), 4),
+        }
+        print("  backtest", fold, flush=True)
+        backtest.append(fold)
+        del Xf
+
+    # permutation importance on a sample of test hours
+    te_idx = np.flatnonzero(fH.te)
+    sample = rng.choice(te_idx, size=min(300_000, te_idx.size), replace=False)
+    Xs = build_X(dep, feats, fH.profile, hourly, rows=sample)
+    perm = permutation_importance(fH.model, Xs, dep.y[sample], scoring="neg_mean_absolute_error",
+                                  n_repeats=3, random_state=42, n_jobs=1)
+    importances = sorted(
+        ({"feature": f, "label": FEATURE_LABELS[f], "importance": round(float(m), 5)}
+         for f, m in zip(feats, perm.importances_mean)),
+        key=lambda d: -d["importance"],
+    )
+    del Xs
+
+    lo, hi = conformal_band(fH.pred_va, dep.y[fH.va], fH.pred_te)
+    intervals = interval_report(y_te, fH.pred_te, lo, hi)
+    dep_frame = dep_frame.assign(lo=lo, hi=hi)
+
+    # example week at the busiest test station
+    busiest = dep_frame.groupby("station")["y"].sum().idxmax()
+    ws = pd.Timestamp("2025-12-01")
+    ex = dep_frame[(dep_frame["station"] == busiest) & (dep_frame["hour_start"] >= ws)
+                   & (dep_frame["hour_start"] < ws + pd.Timedelta(days=7))]
+    example = {"station": str(busiest), "week_start": ws.strftime("%Y-%m-%d"),
+               "series": [{"t": t.strftime("%Y-%m-%dT%H"), "actual": int(a), "pred": round(float(p), 2),
+                           "lo": float(l_), "hi": float(h_), "naive": int(n)}
+                          for t, a, p, l_, h_, n in zip(ex["hour_start"], ex["y"], ex["pred"], ex["lo"], ex["hi"], ex["lag_168"])]}
+
+    # ---- arrivals: headline only, for net flow
+    arr = build_panel(tl, "arrivals", nbr)
+    fA = fit_protocol(arr, n_st, hourly, feats, params, cut_H)
+    print(f"headline arrivals: {fA.trees} trees", flush=True)
+    arr_frame = test_frame(tl, arr, fA.te, fA.pred_te, fA.profile)
+
+    boro = boroughs(tl)
+    holidays = USFederalHolidayCalendar().holidays(tl.t0, tl.t0 + pd.Timedelta(hours=tl.n_hours))
+    dep_hourly = hourly_block(dep_frame)
+    bench_frame = dep_frame.assign(pred=bench_pred)
+    prev_frame = dep_frame.assign(pred=prev_pred)
+
+    def gain(block, base):
+        return round(1 - block["model"]["mae"] / block[base]["mae"], 4)
+
+    arr_hourly = hourly_block(arr_frame)
     out = {
-        "year": year,
-        "split": {"train": f"{year}-01-08 to {year}-08-31", "valid": f"{year}-09-01 to {year}-10-31",
-                  "test": f"{year}-11-01 to {year}-12-31"},
-        "stations": dep["stations"],
-        "features": [FEATURE_LABELS[f] for f in FEATURES],
+        "split": {"headline_train": f"{tl.t0:%Y-%m-%d} to {H['valid_end']}",
+                  "validation": f"{H['train_end']} to {H['valid_end']}",
+                  "test": f"{H['test_start']} to {tl.t0 + pd.Timedelta(hours=tl.n_hours):%Y-%m-%d}",
+                  "benchmark_train": f"2024-01-08 to {B['valid_end']}", "benchmark_test": f"{B['test_start']} onwards"},
+        "stations": int(len(np.unique(dep.s[fH.te]))),
+        "chosen": chosen_label,
+        "features": [FEATURE_LABELS[f] for f in feats],
+        "tuning": tuning,
         "stopping_rule": {"step": TREE_STEP, "min_gain": MIN_GAIN, "max_trees": MAX_TREES},
-        "departures": dep,
-        "arrivals": arr,
+        "departures": {"trees": fH.trees, "early_stopping": fH.history, "hourly": dep_hourly,
+                       "levels": level_accuracy(dep_frame, boro),
+                       "rows": {"test": int(fH.te.sum())}},
+        "arrivals": {"trees": fA.trees, "hourly": arr_hourly},
+        "benchmark_2024_only": {"trees": fB.trees, "hourly": hourly_block(bench_frame),
+                                "levels": level_accuracy(bench_frame, boro)},
+        "yesterdays_weather": {"hourly_mae": metrics(y_te, prev_pred)["mae"],
+                               "levels": level_accuracy(prev_frame, boro)},
         "improvement": {
-            "vs_seven_day_mean_hourly": gain(dep, "seven_day_mean"),
-            "vs_seasonal_naive_hourly": gain(dep, "seasonal_naive"),
-            "vs_yesterday_hourly": gain(dep, "yesterday"),
-            "arrivals_vs_seven_day_mean_hourly": gain(arr, "seven_day_mean"),
+            "vs_seven_day_mean_hourly": gain(dep_hourly, "seven_day_mean"),
+            "vs_seasonal_naive_hourly": gain(dep_hourly, "seasonal_naive"),
+            "vs_yesterday_hourly": gain(dep_hourly, "yesterday"),
+            "arrivals_vs_seven_day_mean_hourly": gain(arr_hourly, "seven_day_mean"),
+            "benchmark_vs_headline_hourly": round(1 - dep_hourly["model"]["mae"] / hourly_block(bench_frame)["model"]["mae"], 4),
         },
-        "net_flow_am": net_flow_eval(dep_test, arr_test),
-        **shared,
+        "net_flow_am": net_flow_eval(dep_frame, arr_frame, holidays),
+        "intervals": intervals,
+        "example": example,
+        "feature_importances": importances,
+        "backtest": backtest,
     }
     data_dir = REPO / (".cache" if SMOKE else "docs/data")
     payload = json.dumps(out, separators=(",", ":"))
     (data_dir / "forecast.json").write_text(payload)
     (data_dir / "forecast.js").write_text("window.FORECAST_DATA = " + payload + ";\n")
     print(f"Wrote {data_dir.relative_to(REPO)}/forecast.{{json,js}}", flush=True)
-    show = {k: out[k] for k in ("tuning", "chosen", "improvement", "yesterdays_weather", "net_flow_am", "intervals", "backtest")}
-    show |= {"levels": dep["levels"], "dep": dep["hourly"], "arr": arr["hourly"], "trees": [dep["trees"], arr["trees"]]}
-    print(json.dumps(show, indent=1))
+    print(json.dumps({k: out[k] for k in ("chosen", "improvement", "benchmark_2024_only", "yesterdays_weather",
+                                          "net_flow_am", "intervals")}, indent=1))
 
 
 if __name__ == "__main__":
