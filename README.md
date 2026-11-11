@@ -58,7 +58,7 @@ chance alone caps accuracy; the ceiling shown assumes a perfect forecast with Po
 | `scripts/sync_facts.py` | Checks every number in the site text and this README against the data |
 | `CitiBike_2024.ipynb` | Walkthrough of the analysis |
 | `CitiBike_Analysis.ipynb` | January deep-dive with a member-vs-casual classifier (ROC-AUC 0.77) |
-| `tests/` | Unit and data-consistency tests, run in CI |
+| `tests/` | Unit, data-consistency and forecast leak tests, run in CI |
 
 ## Run
 

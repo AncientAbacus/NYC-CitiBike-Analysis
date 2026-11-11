@@ -114,13 +114,37 @@ def _lag(a: np.ndarray, k: int) -> np.ndarray:
     return out
 
 
+def history_features(y: np.ndarray) -> dict:
+    """History inputs from a stations x hours count matrix (hours must be whole days).
+
+    Invariant, enforced by tests/test_forecast_features.py: every value for a
+    given calendar day depends only on counts from earlier days, so the whole
+    day can be forecast at midnight.
+    """
+    n_st, n_hours = y.shape
+    feats = {"lag_24": _lag(y, 24), "lag_168": _lag(y, 168)}
+    feats["same_hour_7d_mean"] = sum(_lag(y, 24 * k) for k in range(1, 8)) / 7
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN before the warm-up
+        feats["same_dow_4w_mean"] = np.nanmean(np.stack([_lag(y, 168 * k) for k in range(1, 5)]), axis=0)
+
+    daily = y.reshape(n_st, n_hours // 24, 24).sum(axis=2)  # station x day totals
+    per_hour = lambda d: np.repeat(d, 24, axis=1)           # noqa: E731
+    feats["day_total_yesterday"] = per_hour(_lag(daily, 1))
+    feats["day_total_7d_mean"] = per_hour(sum(_lag(daily, k) for k in range(1, 8)) / 7)
+    system = daily.sum(axis=0, keepdims=True)
+    ratio = _lag(system, 1) / (sum(_lag(system, k) for k in range(2, 9)) / 7)
+    feats["system_ratio_yesterday"] = np.broadcast_to(per_hour(ratio), y.shape)
+    return feats
+
+
 def station_hour_grid(year: str, kind: str) -> pd.DataFrame:
     """One row per station-hour from each station's first trip on (after a
     one-week warm-up): the trip count `y` and every history feature."""
     tcol, scol = ("started_at", "start_station_name") if kind == "departures" else ("ended_at", "end_station_name")
     df = load_clean_period(year, columns=[tcol, scol])
     hours = pd.date_range(f"{year}-01-01", f"{int(year) + 1}-01-01", freq="h", inclusive="left")
-    n_hours, n_days = len(hours), len(hours) // 24
+    n_hours = len(hours)
     h = ((df[tcol] - hours[0]) // pd.Timedelta(hours=1)).to_numpy()
     keep = (h >= 0) & (h < n_hours)  # arrivals can spill into next January
     names = df[scol].cat.categories.astype(str)
@@ -135,19 +159,7 @@ def station_hour_grid(year: str, kind: str) -> pd.DataFrame:
     n_st = len(names)
     print(f"{kind}: {n_st:,} stations x {n_hours:,} hours", flush=True)
 
-    feats = {"lag_24": _lag(y, 24), "lag_168": _lag(y, 168)}
-    feats["same_hour_7d_mean"] = sum(_lag(y, 24 * k) for k in range(1, 8)) / 7
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN before the warm-up
-        feats["same_dow_4w_mean"] = np.nanmean(np.stack([_lag(y, 168 * k) for k in range(1, 5)]), axis=0)
-
-    daily = y.reshape(n_st, n_days, 24).sum(axis=2)  # station x day totals
-    per_hour = lambda d: np.repeat(d, 24, axis=1)    # noqa: E731
-    feats["day_total_yesterday"] = per_hour(_lag(daily, 1))
-    feats["day_total_7d_mean"] = per_hour(sum(_lag(daily, k) for k in range(1, 8)) / 7)
-    system = daily.sum(axis=0, keepdims=True)
-    ratio = _lag(system, 1) / (sum(_lag(system, k) for k in range(2, 9)) / 7)
-    feats["system_ratio_yesterday"] = np.broadcast_to(per_hour(ratio), y.shape)
+    feats = history_features(y)
 
     first = (y > 0).argmax(axis=1)
     mask = np.arange(n_hours)[None, :] >= np.maximum(first, 168)[:, None]
