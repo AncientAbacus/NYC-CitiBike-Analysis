@@ -59,8 +59,12 @@ def _effect(d, name):
     return d["seasonality"]["model"]["effects"][name]
 
 
-def _level(d, key):
-    return next(x for x in d["forecast"]["departures"]["levels"] if x["level"] == key)
+def _level(d, key, where="departures"):
+    return next(x for x in d["forecast"][where]["levels"] if x["level"] == key)
+
+
+def _yest(d, key):
+    return _level(d, key, where="yesterdays_weather")
 
 
 def _busiest_slot(d):
@@ -137,11 +141,16 @@ FACTS = {
     "acc_borough_hour": lambda d: pct(_level(d, "borough_hour")["model"]),
     "acc_system_hour": lambda d: pct(_level(d, "system_hour")["model"]),
     "acc_system_day": lambda d: pct(_level(d, "system_day")["model"]),
-    "acc_system_day_prev": lambda d: pct(d["forecast"]["yesterdays_weather"]["levels"]["system_day"]),
-    "acc_borough_hour_prev": lambda d: pct(d["forecast"]["yesterdays_weather"]["levels"]["borough_hour"]),
-    "acc_station_day_prev": lambda d: pct(d["forecast"]["yesterdays_weather"]["levels"]["station_day"]),
-    "acc_station_hour_prev": lambda d: pct(d["forecast"]["yesterdays_weather"]["levels"]["station_hour"]),
-    "forecast_vs_7d_prev": lambda d: pct(d["forecast"]["yesterdays_weather"]["vs_seven_day_mean_hourly"]),
+    "acc_system_day_prev": lambda d: pct(_yest(d, "system_day")["model"]),
+    "acc_borough_hour_prev": lambda d: pct(_yest(d, "borough_hour")["model"]),
+    "acc_station_day_prev": lambda d: pct(_yest(d, "station_day")["model"]),
+    "acc_station_hour_prev": lambda d: pct(_yest(d, "station_hour")["model"]),
+    "forecast_vs_7d_prev": lambda d: pct(1 - d["forecast"]["yesterdays_weather"]["hourly_mae"]
+                                         / d["forecast"]["departures"]["hourly"]["seven_day_mean"]["mae"]),
+    "acc_station_hour_bench": lambda d: pct(_level(d, "station_hour", where="benchmark_2024_only")["model"]),
+    "extra_year_gain": lambda d: pct(1 - d["forecast"]["departures"]["hourly"]["model"]["mae"]
+                                     / d["forecast"]["benchmark_2024_only"]["hourly"]["model"]["mae"], 1),
+    "forecast_test_months": lambda d: str(len(d["forecast"]["backtest"])),
     "acc_system_day_7d": lambda d: pct(_level(d, "system_day")["seven_day_mean"]),
     "ceiling_station_hour": lambda d: pct(_level(d, "station_hour")["chance_ceiling"]),
     "backtest_folds": lambda d: str(len(d["forecast"]["backtest"])),

@@ -378,10 +378,10 @@
       <li><strong>Rush-hour rain matters several times more than other rain.</strong>
         Days with rain at commute hours have <span data-fact="commute_rain_effect">29%</span> fewer rides
         (95% CI <span data-fact="commute_rain_ci">22&ndash;32%</span>); rain at other hours, <span data-fact="offpeak_rain_effect">7%</span>.</li>
-      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day_prev">83%</span>&ndash;<span data-fact="acc_system_day">90%</span> accurate citywide per day,
+      <li><strong>Tomorrow's demand can be forecast: <span data-fact="acc_system_day_prev">86%</span>&ndash;<span data-fact="acc_system_day">94%</span> accurate citywide per day,
         depending on how good the weather forecast is.</strong>
-        Per station-hour, error is <span data-fact="forecast_vs_7d_prev">13%</span>&ndash;<span data-fact="forecast_vs_7d">18%</span> below the best simple rule; it won
-        <span data-fact="backtest_wins">5</span> of <span data-fact="backtest_folds">5</span> monthly backtests.</li>
+        Per station-hour, error is <span data-fact="forecast_vs_7d_prev">11%</span>&ndash;<span data-fact="forecast_vs_7d">17%</span> below the best simple rule; it won
+        <span data-fact="backtest_wins">3</span> of <span data-fact="backtest_folds">3</span> monthly backtests.</li>
     </ul>
     <div class="stat-row" id="overview-stat-row"></div>
   </header>
@@ -504,8 +504,10 @@
     <p class="section-kicker">04 &middot; Forecast</p>
     <h2>A day-ahead forecast for every station</h2>
     <p class="section-lede">
-      Gradient-boosted models predict tomorrow's hourly departures and arrivals at <span data-fact="forecast_stations">2,273</span> stations
-      from the calendar, the weather and each station's history. Trained on January&ndash;October, scored on November&ndash;December.
+      Gradient-boosted models predict tomorrow's hourly departures and arrivals at <span data-fact="forecast_stations">2,296</span> stations
+      from the calendar, the weather and each station's history. Trained on 2024 and January&ndash;May 2025, scored on June&ndash;August 2025,
+      the latest months with hourly weather (the record ends 25 August). Training on 2025 as well improves error by only
+      <span data-fact="extra_year_gain">0.7%</span> over a model trained on 2024 alone.
     </p>
     <div class="card">
       <div class="stat-row" id="forecast-stat-row"></div>
@@ -516,7 +518,7 @@
       <p class="chart-note" id="levels-note"></p>
 
       <p class="chart-title" id="example-title"></p>
-      <p class="chart-subtitle">Hourly departures, one week in December, with the 80% prediction band</p>
+      <p class="chart-subtitle">Hourly departures, one week in July 2025, with the 80% prediction band</p>
       <div class="chart-box" id="example-chart"></div>
 
       <div class="season-grid">
@@ -558,7 +560,7 @@
         Intervals from a 14-day block bootstrap. These are associations in one year of data, not controlled experiments.</li>
       <li><strong>Rebalancing.</strong> Average net flow on <span data-fact="weekdays">251</span> non-holiday weekdays. The morning and evening flows
         correlate at <span data-fact="am_pm_corr_normalized">-0.80</span> after dividing by each station's traffic.</li>
-      <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">350</span> trees, settings chosen on September&ndash;October.
+      <li><strong>Forecast.</strong> Poisson gradient boosting, <span data-fact="forecast_trees">300</span> trees, settings chosen on April&ndash;May 2025.
         Every input is known a day ahead except the weather, which is observed; the "yesterday's weather" column bounds what a real forecast would give.</li>
       <li><strong>Limits.</strong> One year. No dock capacity or live station status. Station names serve as IDs.</li>
       <li><strong>Code.</strong> <a href="https://github.com/AncientAbacus/NYC-CitiBike-Analysis/blob/main/CitiBike_2024.ipynb" target="_blank" rel="noopener">2024 notebook</a>,
@@ -1224,11 +1226,12 @@
     const dep = f.departures, arr = f.arrivals, imp = f.improvement, nf = f.net_flow_am, iv = f.intervals;
     const p0 = v => (v * 100).toFixed(0) + "%";
     const level = k => dep.levels.find(l => l.level === k);
+    const yesterdayLevel = k => f.yesterdays_weather.levels.find(l => l.level === k).model;
     const wins = f.backtest.filter(b => b.model < b.seven_day_mean).length;
     statTiles("forecast-stat-row", [
       { label: "Citywide per day, actual weather", value: p0(level("system_day").model) + " accurate" },
-      { label: "Citywide per day, yesterday's weather", value: p0(f.yesterdays_weather.levels.system_day) + " accurate" },
-      { label: "Station-hour error vs. best simple rule", value: `${pct(-f.yesterdays_weather.vs_seven_day_mean_hourly)} to ${pct(-imp.vs_seven_day_mean_hourly)}` },
+      { label: "Citywide per day, yesterday's weather", value: p0(yesterdayLevel("system_day")) + " accurate" },
+      { label: "Station-hour error vs. best simple rule", value: `${pct(1 - f.yesterdays_weather.hourly_mae / dep.hourly.seven_day_mean.mae)} to ${pct(imp.vs_seven_day_mean_hourly)} lower` },
       { label: "Monthly backtests won", value: `${wins} of ${f.backtest.length}` },
     ]);
 
@@ -1238,7 +1241,7 @@
       dep.levels.map(l => ({
         highlight: l.level === "system_day",
         cells: [l.label, (l.avg_trips >= 100 ? Math.round(l.avg_trips) : l.avg_trips).toLocaleString(), p0(l.model),
-          p0(f.yesterdays_weather.levels[l.level]), p0(l.seven_day_mean), l.chance_ceiling > 0.995 ? ">99%" : p0(l.chance_ceiling)],
+          p0(yesterdayLevel(l.level)), p0(l.seven_day_mean), l.chance_ceiling > 0.995 ? ">99%" : p0(l.chance_ceiling)],
       })));
     const sh = level("station_hour");
     document.getElementById("levels-note").textContent =
@@ -1290,7 +1293,7 @@
         { name: "Same hour last week", color: GRAY, values: f.backtest.map(b => b.seasonal_naive), dash: "4 3", width: 1.5 },
       ],
       xTicks: f.backtest.map(b => ({ x: b.month, label: MONTHS[b.month - 1] })),
-      xTitle: i => `${MONTHS[f.backtest[i].month - 1]} 2024 (trained on Jan–${MONTHS[f.backtest[i].month - 2]})`,
+      xTitle: i => `${MONTHS[f.backtest[i].month - 1]} 2025 (trained on all earlier months)`,
       valueFormat: v => v.toFixed(2),
       height: 200, ariaLabel: "Rolling monthly backtest: model vs. 7-day average vs. last week",
     });
@@ -1310,7 +1313,7 @@
 
     const base = f.tuning[0].valid_mae, best = Math.min(...f.tuning.slice(1).map(t => t.valid_mae));
     document.getElementById("forecast-note").textContent =
-      `Band: per level of forecast, the shortest range that held 80% of September–October outcomes. Trip counts are whole numbers, ` +
+      `Band: per level of forecast, the shortest range that held 80% of April–May 2025 outcomes. Trip counts are whole numbers, ` +
       `so quiet hours can't land on exactly 80%. Tuning: adding recent-history and rain inputs and resizing the trees cut validation ` +
       `error ${((1 - best / base) * 100).toFixed(1)}%; trees were added until 50 more improved it by under 0.05% (${dep.trees.toLocaleString()} trees).`;
   });
