@@ -77,3 +77,13 @@ def test_station_profile_uses_training_period_only():
     changed = y.copy()
     changed[t >= cut] += 100  # rewrite everything after the training cut
     assert same(profile(y), profile(changed))
+
+
+def test_calibrated_band_hits_target_on_its_own_calibration_data():
+    rng = np.random.default_rng(11)
+    pred = rng.uniform(0, 20, 40_000)
+    y = rng.poisson(pred).astype(float)
+    lo, hi, level = bf.calibrated_band(pred, y, pred, target=0.8)
+    coverage = ((y >= lo) & (y <= hi)).mean()
+    assert abs(coverage - 0.8) < 0.02, coverage  # chosen on these same rows, so should be close
+    assert (lo <= hi).all() and 0.5 <= level <= 0.95

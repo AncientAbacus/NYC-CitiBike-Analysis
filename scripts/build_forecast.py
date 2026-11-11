@@ -405,8 +405,10 @@ def fit_protocol(p: Panel, n_st: int, hourly: dict, feats: list, params: dict, c
 
 def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
     """Per bin of predicted level, the shortest range of trip counts holding
-    `coverage` of calibration outcomes, interpolated between bin centres and
-    rounded outward to whole trips. Bins are finer in the busy top 10%."""
+    `coverage` of calibration outcomes; bounds are interpolated between bin
+    centres and rounded to the nearest whole trip. Bins are finer in the busy
+    top 10%. Rounding to nearest (not outward) keeps the band from
+    over-covering: outward rounding alone added about 5 points."""
     levels = np.unique(np.concatenate([np.linspace(0, 0.9, 28), np.linspace(0.9, 0.99, 19), [0.995, 1.0]]))
     edges = np.unique(np.quantile(pred_cal, levels))
     n_bins = len(edges) - 1
@@ -429,7 +431,25 @@ def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
         lo_by_bin[b], hi_by_bin[b] = best[2], best[3]
     lo_by_bin, hi_by_bin = np.maximum.accumulate(lo_by_bin), np.maximum.accumulate(hi_by_bin)
     centers = np.array([np.median(pred_cal[cal_bin == b]) if (cal_bin == b).any() else edges[b] for b in range(n_bins)])
-    return np.floor(np.interp(pred_new, centers, lo_by_bin)), np.ceil(np.interp(pred_new, centers, hi_by_bin))
+    lo = np.round(np.interp(pred_new, centers, lo_by_bin))
+    hi = np.round(np.interp(pred_new, centers, hi_by_bin))
+    return lo, hi
+
+
+def calibrated_band(pred_va, y_va, pred_te, target=0.8):
+    """Choose the nominal level so the band covers `target` of the VALIDATION
+    months (never the test months), then apply it to the test months."""
+    lo_c, hi_c = 0.5, 0.95
+    for _ in range(10):
+        mid = (lo_c + hi_c) / 2
+        lo, hi = conformal_band(pred_va, y_va, pred_va, coverage=mid)
+        if ((y_va >= lo) & (y_va <= hi)).mean() < target:
+            lo_c = mid
+        else:
+            hi_c = mid
+    level = (lo_c + hi_c) / 2
+    lo, hi = conformal_band(pred_va, y_va, pred_te, coverage=level)
+    return lo, hi, level
 
 
 def interval_report(y, pred, lo, hi) -> dict:
@@ -599,8 +619,13 @@ def main() -> None:
     )
     del Xs
 
-    lo, hi = conformal_band(fH.pred_va, dep.y[fH.va], fH.pred_te)
+    y_te = dep.y[fH.te]
+    np.savez(REPO / ".cache" / ("forecast_preds_smoke.npz" if SMOKE else "forecast_preds.npz"),
+             pred_va=fH.pred_va, y_va=dep.y[fH.va], pred_te=fH.pred_te, y_te=y_te,
+             t_te=dep.t[fH.te], s_te=dep.s[fH.te])  # for diagnosing the prediction band
+    lo, hi, band_level = calibrated_band(fH.pred_va, dep.y[fH.va], fH.pred_te)
     intervals = interval_report(y_te, fH.pred_te, lo, hi)
+    intervals["band_level_chosen_on_validation"] = round(float(band_level), 3)
     dep_frame = dep_frame.assign(lo=lo, hi=hi)
 
     # example week at the busiest test station
