@@ -366,30 +366,41 @@ def fit_early_stopped(params: dict, Xtr, ytr, Xva, yva):
     return best_iter, history, best_pred
 
 
+TRAIN_CAP, VALID_CAP = 15_000_000, 3_000_000  # rows sampled for fitting, to keep memory under the limit
+
+
 @dataclass
 class Fit:
     model: object
     trees: int
     history: list
     profile: np.ndarray
-    X: np.ndarray
-    pred_va: np.ndarray
+    va: np.ndarray        # validation rows used for early stopping (sampled)
+    pred_va: np.ndarray   # train-only model's predictions on va
+    fit_rows: np.ndarray  # rows the final model was refit on
+    te: np.ndarray        # test rows (all of them)
     pred_te: np.ndarray
-    tr: np.ndarray
-    va: np.ndarray
-    te: np.ndarray
 
 
-def fit_protocol(p: Panel, n_st: int, hourly: dict, feats: list, params: dict, cut: dict) -> Fit:
+def _cap(rows: np.ndarray, n: int, rng) -> np.ndarray:
+    return rows if rows.size <= n else np.sort(rng.choice(rows, size=n, replace=False))
+
+
+def fit_protocol(p: Panel, n_st: int, hourly: dict, feats: list, params: dict, cut: dict, rng) -> Fit:
     profile = station_profile(p, n_st, hourly, cut["train_end"])
-    X = build_X(p, feats, profile, hourly)
-    tr = p.t < cut["train_end"]
-    va = (p.t >= cut["train_end"]) & (p.t < cut["valid_end"])
-    fit = p.t < cut["valid_end"]
-    te = p.t >= cut["test_start"]
-    trees, history, pred_va = fit_early_stopped(params, X[tr], p.y[tr], X[va], p.y[va])
-    model = HistGradientBoostingRegressor(**params, max_iter=trees).fit(X[fit], p.y[fit])
-    return Fit(model, trees, history, profile, X, pred_va, model.predict(X[te]), tr, va, te)
+    tr = _cap(np.flatnonzero(p.t < cut["train_end"]), TRAIN_CAP, rng)
+    va = _cap(np.flatnonzero((p.t >= cut["train_end"]) & (p.t < cut["valid_end"])), VALID_CAP, rng)
+    te = np.flatnonzero(p.t >= cut["test_start"])
+    Xtr = build_X(p, feats, profile, hourly, rows=tr)
+    Xva = build_X(p, feats, profile, hourly, rows=va)
+    trees, history, pred_va = fit_early_stopped(params, Xtr, p.y[tr], Xva, p.y[va])
+    Xfit = np.vstack([Xtr, Xva])
+    del Xtr, Xva
+    fit_rows = np.concatenate([tr, va])
+    model = HistGradientBoostingRegressor(**params, max_iter=trees).fit(Xfit, p.y[fit_rows])
+    del Xfit
+    pred_te = model.predict(build_X(p, feats, profile, hourly, rows=te))
+    return Fit(model, trees, history, profile, va, pred_va, fit_rows, te, pred_te)
 
 
 def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
@@ -539,22 +550,20 @@ def main() -> None:
     params = params_for(feats, overrides)
     print(f"chosen: {chosen_label}", flush=True)
 
-    fH = fit_protocol(dep, n_st, hourly, feats, params, cut_H)
+    fH = fit_protocol(dep, n_st, hourly, feats, params, cut_H, rng)
     print(f"headline departures: {fH.trees} trees", flush=True)
     dep_frame = test_frame(tl, dep, fH.te, fH.pred_te, fH.profile)
     y_te = dep_frame["y"].to_numpy()
 
-    fB = fit_protocol(dep, n_st, hourly, feats, params, cut_B)
+    fB = fit_protocol(dep, n_st, hourly, feats, params, cut_B, rng)
     print(f"benchmark (2024 only) departures: {fB.trees} trees", flush=True)
     bench_pred = fB.pred_te
 
     # weather test: retrain with yesterday's weather in place of the day's
-    X_prev = build_X(dep, feats, fH.profile, hourly, prev=True)
-    fit_rows = dep.t < cut_H["valid_end"]
-    prev_model = HistGradientBoostingRegressor(**params, max_iter=fH.trees).fit(X_prev[fit_rows], dep.y[fit_rows])
-    prev_pred = prev_model.predict(X_prev[fH.te])
-    del X_prev, prev_model, fit_rows
-    fB.X = fH.X = None  # free the training matrices before the arrivals pass
+    prev_model = HistGradientBoostingRegressor(**params, max_iter=fH.trees).fit(
+        build_X(dep, feats, fH.profile, hourly, prev=True, rows=fH.fit_rows), dep.y[fH.fit_rows])
+    prev_pred = prev_model.predict(build_X(dep, feats, fH.profile, hourly, prev=True, rows=fH.te))
+    del prev_model
 
     # rolling backtest, one fold per month of the test year
     backtest = []
@@ -579,8 +588,7 @@ def main() -> None:
         del Xf
 
     # permutation importance on a sample of test hours
-    te_idx = np.flatnonzero(fH.te)
-    sample = rng.choice(te_idx, size=min(300_000, te_idx.size), replace=False)
+    sample = rng.choice(fH.te, size=min(300_000, fH.te.size), replace=False)
     Xs = build_X(dep, feats, fH.profile, hourly, rows=sample)
     perm = permutation_importance(fH.model, Xs, dep.y[sample], scoring="neg_mean_absolute_error",
                                   n_repeats=3, random_state=42, n_jobs=1)
@@ -607,7 +615,7 @@ def main() -> None:
 
     # ---- arrivals: headline only, for net flow
     arr = build_panel(tl, "arrivals", nbr)
-    fA = fit_protocol(arr, n_st, hourly, feats, params, cut_H)
+    fA = fit_protocol(arr, n_st, hourly, feats, params, cut_H, rng)
     print(f"headline arrivals: {fA.trees} trees", flush=True)
     arr_frame = test_frame(tl, arr, fA.te, fA.pred_te, fA.profile)
 
@@ -633,7 +641,7 @@ def main() -> None:
         "stopping_rule": {"step": TREE_STEP, "min_gain": MIN_GAIN, "max_trees": MAX_TREES},
         "departures": {"trees": fH.trees, "early_stopping": fH.history, "hourly": dep_hourly,
                        "levels": level_accuracy(dep_frame, boro),
-                       "rows": {"test": int(fH.te.sum())}},
+                       "rows": {"test": int(fH.te.size)}},
         "arrivals": {"trees": fA.trees, "hourly": arr_hourly},
         "benchmark_2024_only": {"trees": fB.trees, "hourly": hourly_block(bench_frame),
                                 "levels": level_accuracy(bench_frame, boro)},
