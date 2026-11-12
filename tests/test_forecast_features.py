@@ -83,7 +83,9 @@ def test_calibrated_band_hits_target_on_its_own_calibration_data():
     rng = np.random.default_rng(11)
     pred = rng.uniform(0, 20, 40_000)
     y = rng.poisson(pred).astype(float)
-    lo, hi, level = bf.calibrated_band(pred, y, pred, target=0.8)
-    coverage = ((y >= lo) & (y <= hi)).mean()
-    assert abs(coverage - 0.8) < 0.02, coverage  # chosen on these same rows, so should be close
-    assert (lo <= hi).all() and 0.5 <= level <= 0.95
+    lo, hi, levels = bf.calibrated_band(pred, y, pred, target=0.8)
+    for name, in_segment in bf.SEGMENTS:
+        m = in_segment(pred)
+        coverage = ((y[m] >= lo[m]) & (y[m] <= hi[m])).mean()
+        assert abs(coverage - 0.8) < 0.03, (name, coverage)  # chosen on these same rows
+    assert (lo <= hi).all() and all(0.5 <= v <= 0.95 for v in levels.values())

@@ -1313,9 +1313,10 @@
 
     const base = f.tuning[0].valid_mae, best = Math.min(...f.tuning.slice(1).map(t => t.valid_mae));
     document.getElementById("forecast-note").textContent =
-      `Band: for each level of forecast, the shortest range of trips that covered the same share of April–May 2025 outcomes. ` +
-      `That share (${(f.intervals.band_level_chosen_on_validation * 100).toFixed(0)}%) was chosen on those months to land on 80%; ` +
-      `June–August then came in at ${(f.intervals.all.coverage * 100).toFixed(0)}%. Trip counts are whole numbers, so quiet hours cover more. ` +
+      `Band: for each level of forecast, the shortest range of trips that covered a set share of outcomes. That share was chosen ` +
+      `separately for quiet, medium and busy hours so that each covered 80% of April–May 2025. In June–August the band covered ` +
+      `${(f.intervals.all.coverage * 100).toFixed(0)}% overall (quiet ${(f.intervals.quiet.coverage * 100).toFixed(0)}%, medium ` +
+      `${(f.intervals.medium.coverage * 100).toFixed(0)}%, busy ${(f.intervals.busy.coverage * 100).toFixed(0)}%). ` +
       `Tuning: adding recent-history and rain inputs and resizing the trees cut validation ` +
       `error ${((1 - best / base) * 100).toFixed(1)}%; trees were added until 50 more improved it by under 0.05% (${dep.trees.toLocaleString()} trees).`;
   });

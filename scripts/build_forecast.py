@@ -436,20 +436,29 @@ def conformal_band(pred_cal, y_cal, pred_new, coverage=0.8):
     return lo, hi
 
 
+SEGMENTS = [("quiet", lambda p: p < 1), ("medium", lambda p: (p >= 1) & (p < 5)), ("busy", lambda p: p >= 5)]
+
+
 def calibrated_band(pred_va, y_va, pred_te, target=0.8):
-    """Choose the nominal level so the band covers `target` of the VALIDATION
-    months (never the test months), then apply it to the test months."""
-    lo_c, hi_c = 0.5, 0.95
-    for _ in range(10):
-        mid = (lo_c + hi_c) / 2
-        lo, hi = conformal_band(pred_va, y_va, pred_va, coverage=mid)
-        if ((y_va >= lo) & (y_va <= hi)).mean() < target:
-            lo_c = mid
-        else:
-            hi_c = mid
-    level = (lo_c + hi_c) / 2
-    lo, hi = conformal_band(pred_va, y_va, pred_te, coverage=level)
-    return lo, hi, level
+    """One band level per segment of predicted demand (quiet, medium, busy), each
+    chosen so that segment covers `target` of the VALIDATION months. The test
+    months are never used to choose a level; they only receive the band."""
+    lo_te, hi_te = np.zeros(len(pred_te)), np.zeros(len(pred_te))
+    levels = {}
+    for name, in_segment in SEGMENTS:
+        mv, mt = in_segment(pred_va), in_segment(pred_te)
+        lo_c, hi_c = 0.5, 0.95
+        for _ in range(10):
+            mid = (lo_c + hi_c) / 2
+            lo, hi = conformal_band(pred_va[mv], y_va[mv], pred_va[mv], coverage=mid)
+            if ((y_va[mv] >= lo) & (y_va[mv] <= hi)).mean() < target:
+                lo_c = mid
+            else:
+                hi_c = mid
+        level = (lo_c + hi_c) / 2
+        levels[name] = round(float(level), 3)
+        lo_te[mt], hi_te[mt] = conformal_band(pred_va[mv], y_va[mv], pred_te[mt], coverage=level)
+    return lo_te, hi_te, levels
 
 
 def interval_report(y, pred, lo, hi) -> dict:
@@ -623,9 +632,9 @@ def main() -> None:
     np.savez(REPO / ".cache" / ("forecast_preds_smoke.npz" if SMOKE else "forecast_preds.npz"),
              pred_va=fH.pred_va, y_va=dep.y[fH.va], pred_te=fH.pred_te, y_te=y_te,
              t_te=dep.t[fH.te], s_te=dep.s[fH.te])  # for diagnosing the prediction band
-    lo, hi, band_level = calibrated_band(fH.pred_va, dep.y[fH.va], fH.pred_te)
+    lo, hi, band_levels = calibrated_band(fH.pred_va, dep.y[fH.va], fH.pred_te)
     intervals = interval_report(y_te, fH.pred_te, lo, hi)
-    intervals["band_level_chosen_on_validation"] = round(float(band_level), 3)
+    intervals["band_levels_chosen_on_validation"] = band_levels
     dep_frame = dep_frame.assign(lo=lo, hi=hi)
 
     # example week at the busiest test station
