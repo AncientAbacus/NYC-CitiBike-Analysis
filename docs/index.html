@@ -1231,7 +1231,7 @@
     statTiles("forecast-stat-row", [
       { label: "Citywide per day, actual weather", value: p0(level("system_day").model) + " accurate" },
       { label: "Citywide per day, yesterday's weather", value: p0(yesterdayLevel("system_day")) + " accurate" },
-      { label: "Station-hour error vs. best simple rule", value: `${pct(1 - f.yesterdays_weather.hourly_mae / dep.hourly.seven_day_mean.mae)} to ${pct(imp.vs_seven_day_mean_hourly)} lower` },
+      { label: "Station-hour error vs. best simple rule", value: `${p0(1 - f.yesterdays_weather.hourly_mae / dep.hourly.seven_day_mean.mae)} to ${p0(imp.vs_seven_day_mean_hourly)} lower` },
       { label: "Monthly backtests won", value: `${wins} of ${f.backtest.length}` },
     ]);
 
